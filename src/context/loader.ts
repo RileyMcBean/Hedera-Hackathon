@@ -66,14 +66,14 @@ const FALLBACK_STORE: ContextStore = {
       role: "OPERATOR",
       partner_id: "partner-alpha",
       amount_threshold_hbar: 100.0,
-      approved_recipients: ["0.0.800", "0.0.801"],
+      approved_recipients: ["0.0.800", "0.0.801", "0.0.8596004", "0.0.8597846"],
       enforce_recipient_allowlist: true,
     },
     "0.0.200": {
       role: "PARTNER",
       partner_id: "partner-beta",
       amount_threshold_hbar: 25.0,
-      approved_recipients: ["0.0.800"],
+      approved_recipients: ["0.0.800", "0.0.8596004", "0.0.8597846"],
       enforce_recipient_allowlist: true,
     },
     "0.0.300": {
