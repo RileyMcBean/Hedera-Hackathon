@@ -30,6 +30,23 @@ export async function POST(req: NextRequest) {
     // Stage 1: Intent Agent — parse natural language → structured action
     const parseResult = await parseInstruction(instruction, actorId);
 
+    // Guard: do not proceed when confidence is too low or instruction is ambiguous
+    if (!parseResult.shouldProceed) {
+      return NextResponse.json({
+        action: parseResult.action,
+        context: null,
+        policyResult: null,
+        stage: "PARSE_BLOCKED",
+        timestamp: new Date().toISOString(),
+        txId: "",
+        balanceHbar: null,
+        hcsTopicId: "",
+        hcsSequenceNumber: -1,
+        error: parseResult.clarificationMessage ?? "Instruction too ambiguous to process.",
+        parseResult,
+      });
+    }
+
     // Stage 2: Runtime pipeline — policy + execution + audit
     const pipelineResult = await run(parseResult.action);
 

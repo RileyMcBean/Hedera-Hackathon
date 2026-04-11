@@ -19,6 +19,13 @@ describe("ParseResult shape", () => {
     expect(r.action).toBeDefined();
   });
 
+  it("returns shouldProceed, parseWarnings, clarificationMessage", async () => {
+    const r = await parseInstruction("Send 5 HBAR to 0.0.8570146", "0.0.8570111");
+    expect(typeof r.shouldProceed).toBe("boolean");
+    expect(Array.isArray(r.parseWarnings)).toBe(true);
+    expect(r.clarificationMessage === null || typeof r.clarificationMessage === "string").toBe(true);
+  });
+
   it("always returns heuristic mode when no API key is set", async () => {
     const r = await parseInstruction("Send 5 HBAR to 0.0.800", "0.0.100");
     expect(r.parserMode).toBe("heuristic");
@@ -161,5 +168,73 @@ describe("workflowContext", () => {
   it("extractedRecipient is null when none found", async () => {
     const r = await parseInstruction("Send 5 HBAR to someone", "0.0.8570111");
     expect(r.workflowContext.extractedRecipient).toBeNull();
+  });
+});
+
+// ── shouldProceed / ambiguity handling ────────────────────────────────────────
+
+describe("shouldProceed and ambiguity handling", () => {
+  // High confidence — proceed
+  it("shouldProceed is true when both amount and recipient are present", async () => {
+    const r = await parseInstruction("Send 5 HBAR to 0.0.8570146", "0.0.8570111");
+    expect(r.shouldProceed).toBe(true);
+    expect(r.clarificationMessage).toBeNull();
+  });
+
+  it("parseWarnings is empty for a high-confidence parse", async () => {
+    const r = await parseInstruction("Send 5 HBAR to 0.0.8570146", "0.0.8570111");
+    expect(r.parseWarnings).toHaveLength(0);
+  });
+
+  // Medium confidence — proceed with warnings
+  it("shouldProceed is true but parseWarnings non-empty when only amount is present", async () => {
+    const r = await parseInstruction("Send 5 HBAR to someone", "0.0.8570111");
+    // confidence = 0.75 (base 0.5 + amount 0.25) — medium, still proceeds
+    expect(r.shouldProceed).toBe(true);
+    expect(r.parseWarnings.length).toBeGreaterThan(0);
+    expect(r.clarificationMessage).toBeNull();
+  });
+
+  // Low confidence — block
+  it("shouldProceed is false when neither amount nor recipient are present", async () => {
+    const r = await parseInstruction("please do the thing", "0.0.8570111");
+    expect(r.shouldProceed).toBe(false);
+    expect(r.clarificationMessage).not.toBeNull();
+  });
+
+  it("clarificationMessage is set when both amount and recipient are missing", async () => {
+    const r = await parseInstruction("please do the thing", "0.0.8570111");
+    expect(r.clarificationMessage).toMatch(/missing/i);
+  });
+
+  it("shouldProceed is false for vague transfer instructions", async () => {
+    const r = await parseInstruction("send money", "0.0.8570111");
+    expect(r.shouldProceed).toBe(false);
+    expect(r.clarificationMessage).toMatch(/vague|specify|amount|recipient/i);
+  });
+
+  it("shouldProceed is false for 'pay them'", async () => {
+    const r = await parseInstruction("pay them", "0.0.8570111");
+    expect(r.shouldProceed).toBe(false);
+    expect(r.clarificationMessage).not.toBeNull();
+  });
+
+  // CHECK_BALANCE — not blocked by missing transfer fields
+  it("shouldProceed is true for a clean balance check", async () => {
+    const r = await parseInstruction("Check my balance", "0.0.8570111");
+    expect(r.shouldProceed).toBe(true);
+    expect(r.clarificationMessage).toBeNull();
+  });
+
+  it("clarificationMessage is null for CHECK_BALANCE", async () => {
+    const r = await parseInstruction("What is my balance?", "0.0.8570111");
+    expect(r.clarificationMessage).toBeNull();
+  });
+
+  // Missing recipient only — proceed with warning (confidence = 0.75)
+  it("missing recipient only attaches warning but still proceeds", async () => {
+    const r = await parseInstruction("Send 5 HBAR to someone", "0.0.8570111");
+    expect(r.shouldProceed).toBe(true);
+    expect(r.parseWarnings.some((w) => /recipient/i.test(w))).toBe(true);
   });
 });

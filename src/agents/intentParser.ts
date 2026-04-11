@@ -39,6 +39,123 @@ export interface ParseResult {
   /** Non-fatal parse warnings. Empty array = clean parse. */
   parseErrors: string[];
   workflowContext: WorkflowContext;
+
+  /**
+   * Whether the pipeline should proceed to policy evaluation and execution.
+   * false when confidence < LOW_CONFIDENCE_THRESHOLD or a blocking ambiguity
+   * is detected (e.g. transfer with no amount AND no recipient).
+   */
+  shouldProceed: boolean;
+  /** Human-readable warnings attached when medium confidence or partial parse. */
+  parseWarnings: string[];
+  /**
+   * Set when the parse is too ambiguous to proceed. The UI surfaces this
+   * as a clarification prompt instead of executing the action.
+   * null when shouldProceed is true.
+   */
+  clarificationMessage: string | null;
+}
+
+// ── Confidence thresholds ─────────────────────────────────────────────────────
+
+/** Below this threshold: block execution and ask for clarification. */
+const LOW_CONFIDENCE_THRESHOLD = 0.5;
+
+/** Below this threshold: continue but attach warnings. */
+const MEDIUM_CONFIDENCE_THRESHOLD = 0.8;
+
+// ── Ambiguity classifier ──────────────────────────────────────────────────────
+
+type AmbiguitySignals = {
+  missingAmount: boolean;
+  missingRecipient: boolean;
+  vagueInstruction: boolean;
+};
+
+/** Detects structural ambiguity independent of confidence score. */
+function classifyAmbiguity(
+  intent: ActionType,
+  extractedAmount: number | null,
+  extractedRecipient: string | null,
+  rawInstruction: string
+): AmbiguitySignals {
+  const normalized = rawInstruction.toLowerCase().trim();
+
+  // "send money", "pay them", "transfer funds" — verb with no specifics
+  const VAGUE_RE = /^(send|pay|transfer|move|wire|remit)\s+(money|funds|hbar|it|them|something|this)?\s*$/i;
+
+  return {
+    missingAmount: intent === "HBAR_TRANSFER" && extractedAmount === null,
+    missingRecipient: intent === "HBAR_TRANSFER" && extractedRecipient === null,
+    vagueInstruction: VAGUE_RE.test(normalized),
+  };
+}
+
+/** Build clarification message from ambiguity signals; null if none.
+ *
+ * A clarification message (and resulting block) is raised only when the
+ * instruction cannot possibly be executed safely:
+ *   - vague instruction (no specifics at all)
+ *   - HBAR_TRANSFER with BOTH amount AND recipient missing
+ *   - confidence falls below the hard low threshold after all extraction
+ *
+ * A single missing field (amount OR recipient) is medium-confidence and
+ * surfaces as a parseWarning rather than a block.
+ */
+function buildClarificationMessage(
+  intent: ActionType,
+  signals: AmbiguitySignals,
+  confidence: number
+): string | null {
+  // Non-transfer intents with acceptable confidence are never blocked here
+  if (intent !== "HBAR_TRANSFER" && confidence >= LOW_CONFIDENCE_THRESHOLD) return null;
+
+  if (signals.vagueInstruction) {
+    return "Your instruction is too vague to process safely. Please specify the amount in HBAR and the recipient's Hedera account ID (e.g. \"Send 10 HBAR to 0.0.12345\").";
+  }
+
+  // Block only when BOTH required fields are absent — one missing is a warning, not a block
+  if (signals.missingAmount && signals.missingRecipient) {
+    return "Cannot proceed: the instruction is missing the amount (e.g. 10 HBAR) and the recipient account ID (e.g. 0.0.12345). Please restate with both details.";
+  }
+
+  if (confidence < LOW_CONFIDENCE_THRESHOLD) {
+    return "The instruction could not be parsed with enough confidence to proceed safely. Please rephrase and try again.";
+  }
+
+  return null;
+}
+
+/** Derive shouldProceed, parseWarnings, clarificationMessage from parse outputs. */
+function deriveProceeding(
+  intent: ActionType,
+  confidence: number,
+  signals: AmbiguitySignals,
+  parseErrors: string[]
+): { shouldProceed: boolean; parseWarnings: string[]; clarificationMessage: string | null } {
+  const clarificationMessage = buildClarificationMessage(intent, signals, confidence);
+  const blocked = clarificationMessage !== null || confidence < LOW_CONFIDENCE_THRESHOLD;
+
+  const parseWarnings: string[] = [];
+  if (!blocked && confidence < MEDIUM_CONFIDENCE_THRESHOLD) {
+    // Surface individual missing-field notices as warnings (not errors — still proceeding)
+    if (signals.missingAmount) {
+      parseWarnings.push("No HBAR amount found — recipient will receive 0 HBAR unless you specify an amount.");
+    }
+    if (signals.missingRecipient) {
+      parseWarnings.push("No recipient account ID found — transfer will have no destination unless you specify one.");
+    }
+    if (parseWarnings.length === 0) {
+      // Generic fallback for any other medium-confidence scenario
+      parseWarnings.push("Confidence is below 80% — review extracted fields before proceeding.");
+    }
+  }
+
+  return {
+    shouldProceed: !blocked,
+    parseWarnings,
+    clarificationMessage,
+  };
 }
 
 // ── Regex patterns ────────────────────────────────────────────────────────────
@@ -121,6 +238,14 @@ function extractHeuristic(
     memo: "",
   });
 
+  const ambiguity = classifyAmbiguity(intent, extractedAmount, extractedRecipient, rawInstruction);
+  const { shouldProceed, parseWarnings, clarificationMessage } = deriveProceeding(
+    intent,
+    confidence,
+    ambiguity,
+    parseErrors
+  );
+
   return {
     needsLlm,
     result: {
@@ -128,6 +253,9 @@ function extractHeuristic(
       parserMode: "heuristic",
       confidence,
       parseErrors,
+      shouldProceed,
+      parseWarnings,
+      clarificationMessage,
       workflowContext: {
         rawInstruction,
         detectedIntent: intent,
@@ -201,17 +329,35 @@ async function extractViaLlm(
 
   // Mirror what heuristic found for workflowContext
   const accounts = [...rawInstruction.matchAll(ACCOUNT_RE)].map((m) => m[1]);
+  const extractedAmount = llmResult.amountHbar || null;
+  const extractedRecipient = llmResult.recipientId || null;
+
+  const ambiguity = classifyAmbiguity(
+    llmResult.actionType,
+    extractedAmount,
+    extractedRecipient,
+    rawInstruction
+  );
+  const { shouldProceed, parseWarnings, clarificationMessage } = deriveProceeding(
+    llmResult.actionType,
+    confidence,
+    ambiguity,
+    parseErrors
+  );
 
   return {
     action,
     parserMode: "llm",
     confidence,
     parseErrors,
+    shouldProceed,
+    parseWarnings,
+    clarificationMessage,
     workflowContext: {
       rawInstruction,
       detectedIntent: llmResult.actionType,
-      extractedAmount: llmResult.amountHbar || null,
-      extractedRecipient: llmResult.recipientId || null,
+      extractedAmount,
+      extractedRecipient,
       extractedAccounts: [...new Set(accounts)],
     },
   };

@@ -17,6 +17,7 @@ import { record as recordAudit } from "../audit/trail";
 // ── Pipeline stage ────────────────────────────────────────────────────────────
 
 export type PipelineStage =
+  | "PARSE_BLOCKED"
   | "POLICY_EVALUATED"
   | "EXECUTED"
   | "AUDITED"

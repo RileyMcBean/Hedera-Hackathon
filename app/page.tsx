@@ -211,11 +211,39 @@ export default function Home() {
               ))}
             </ul>
           )}
+
+          {/* Medium-confidence warnings */}
+          {result.parseResult.parseWarnings.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {result.parseResult.parseWarnings.map((w, i) => (
+                <li key={i} className="text-xs text-orange-400">
+                  ⚡ {w}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
-      {/* Decision panel */}
-      {result && (
+      {/* Clarification banner — shown instead of Decision when parse is blocked */}
+      {result?.parseResult?.clarificationMessage && (
+        <section className="border border-amber-700 bg-amber-950/40 rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-amber-400">Clarification needed</span>
+            <span className="text-xs px-2 py-0.5 rounded bg-amber-900 text-amber-300 font-mono">
+              PARSE_BLOCKED
+            </span>
+          </div>
+          <p className="text-sm text-amber-200">{result.parseResult.clarificationMessage}</p>
+          <p className="text-xs text-amber-500">
+            The instruction was not forwarded to the policy engine or execution layer.
+            Please revise your instruction and resubmit.
+          </p>
+        </section>
+      )}
+
+      {/* Decision panel — only shown when parse proceeded */}
+      {result && !result.parseResult?.clarificationMessage && (
         <section className="space-y-3 border border-gray-800 rounded-lg p-4">
           <h2 className="text-lg font-semibold text-gray-200">Decision</h2>
           {badge && (
@@ -308,6 +336,22 @@ export default function Home() {
                   {result.policyResult?.decision ?? "null"} (stage: {result.stage})
                 </pre>
               </div>
+              {result.parseResult && (
+                <div>
+                  <span className="text-yellow-600 font-semibold">Parse gate</span>
+                  <pre className="mt-0.5 text-gray-300">
+                    {JSON.stringify(
+                      {
+                        shouldProceed: result.parseResult.shouldProceed,
+                        parseWarnings: result.parseResult.parseWarnings,
+                        clarificationMessage: result.parseResult.clarificationMessage,
+                      },
+                      null,
+                      2
+                    )}
+                  </pre>
+                </div>
+              )}
               <div>
                 <span className="text-yellow-600 font-semibold">Reason / rules</span>
                 <pre className="mt-0.5 whitespace-pre-wrap break-all text-gray-300">
