@@ -67,9 +67,9 @@ export class HederaSdkBackend implements TransferBackend {
 
     try {
       operatorId = AccountId.fromString(config.operatorId);
-      operatorKey = PrivateKey.fromString(config.operatorKey);
+      operatorKey = PrivateKey.fromStringECDSA(config.operatorKey.replace(/^0x/i, ''));
       treasuryId = AccountId.fromString(config.treasuryId);
-      treasuryKey = PrivateKey.fromStringECDSA(config.treasuryKey);
+      treasuryKey = PrivateKey.fromStringECDSA(config.treasuryKey.replace(/^0x/i, ''));
       recipientId = AccountId.fromString(action.recipientId);
     } catch (err) {
       throw new TransferError(

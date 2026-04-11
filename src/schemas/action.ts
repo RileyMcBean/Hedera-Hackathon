@@ -8,16 +8,20 @@
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
-export const ActionTypeSchema = z.enum(["HBAR_TRANSFER"]);
+export const ActionTypeSchema = z.enum([
+  "HBAR_TRANSFER",
+  "CHECK_BALANCE",
+]);
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 
 export const ActionSchema = z.object({
   correlationId: z.string().uuid().default(() => randomUUID()),
   actionType: ActionTypeSchema,
-  actorId: z.string(),       // Hedera account ID of the requesting actor
-  recipientId: z.string(),   // Hedera account ID of the intended recipient
-  amountHbar: z.number(),    // Amount in HBAR (not tinybars)
-  rawInstruction: z.string(), // Original natural-language input (preserved for audit)
+  actorId: z.string(),
+  // Optional for non-transfer intents (e.g. CHECK_BALANCE)
+  recipientId: z.string().default(""),
+  amountHbar: z.number().default(0),
+  rawInstruction: z.string(),
   memo: z.string().default(""),
 });
 

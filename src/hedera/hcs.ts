@@ -42,7 +42,7 @@ export async function submitMessage(msg: AuditMessage): Promise<AuditMessage> {
     config.network === "testnet" ? Client.forTestnet() : Client.forMainnet();
   client.setOperator(
     AccountId.fromString(config.operatorId),
-    PrivateKey.fromStringECDSA(config.operatorKey)
+    PrivateKey.fromStringECDSA(config.operatorKey.replace(/^0x/i, ''))
   );
 
   const payload = JSON.stringify(msg);

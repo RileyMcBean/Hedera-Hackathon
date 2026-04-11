@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PipelineResult } from "../src/runtime/pipeline";
+import type { ParseResult } from "../src/agents/intentParser";
 import type { AuditMessage } from "../src/schemas/audit";
 
 const DEMO_ACTORS = [
@@ -13,6 +14,7 @@ const DEMO_INSTRUCTIONS = [
   "Transfer 10 HBAR to 0.0.8570146",
   "Pay 200 HBAR to 0.0.8570146",
   "Send 5 HBAR to 0.0.9999999",
+  "Check my balance",
 ];
 
 type DecisionBadge = {
@@ -38,7 +40,7 @@ function getBadge(decision?: string): DecisionBadge {
 export default function Home() {
   const [instruction, setInstruction] = useState("");
   const [actorId, setActorId] = useState(DEMO_ACTORS[0].id);
-  const [result, setResult] = useState<PipelineResult | null>(null);
+  const [result, setResult] = useState<(PipelineResult & { parseResult?: ParseResult }) | null>(null);
   const [auditLog, setAuditLog] = useState<AuditMessage[]>([]);
   const [auditConfigured, setAuditConfigured] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
@@ -153,6 +155,63 @@ export default function Home() {
         <div className="bg-red-900/40 border border-red-700 rounded p-3 text-sm text-red-300">
           {error}
         </div>
+      )}
+
+      {/* Intent Agent card */}
+      {result?.parseResult && (
+        <section className="border border-indigo-800 rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+              Intent Agent
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded font-mono ${
+              result.parseResult.parserMode === "heuristic"
+                ? "bg-indigo-900 text-indigo-300"
+                : "bg-purple-900 text-purple-300"
+            }`}>
+              {result.parseResult.parserMode}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded font-mono ${
+              result.parseResult.confidence >= 0.8
+                ? "bg-green-900 text-green-300"
+                : result.parseResult.confidence >= 0.5
+                ? "bg-yellow-900 text-yellow-300"
+                : "bg-red-900 text-red-300"
+            }`}>
+              {Math.round(result.parseResult.confidence * 100)}% confidence
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-400 font-mono">
+            <span className="text-gray-500">Intent</span>
+            <span className="text-gray-200">{result.parseResult.workflowContext.detectedIntent}</span>
+
+            <span className="text-gray-500">Amount</span>
+            <span className="text-gray-200">
+              {result.parseResult.workflowContext.extractedAmount !== null
+                ? `${result.parseResult.workflowContext.extractedAmount} HBAR`
+                : "—"}
+            </span>
+
+            <span className="text-gray-500">Recipient</span>
+            <span className="text-gray-200">
+              {result.parseResult.workflowContext.extractedRecipient ?? "—"}
+            </span>
+
+            <span className="text-gray-500">Actor</span>
+            <span className="text-gray-200">{result.parseResult.action.actorId}</span>
+          </div>
+
+          {result.parseResult.parseErrors.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {result.parseResult.parseErrors.map((e, i) => (
+                <li key={i} className="text-xs text-yellow-500">
+                  ⚠ {e}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       {/* Decision panel */}
