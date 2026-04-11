@@ -26,12 +26,10 @@ export const R005 = "R005:RECIPIENT_APPROVED";
 export const R006 = "R006:AMOUNT_WITHIN_LIMIT";
 export const R007 = "R007:TREASURY_NOT_RESTRICTED";
 
-const _ALL_RULE_IDS = [R001, R002, R003, R004, R005, R006, R007];
-
-// Action types that involve moving funds
+// Action types that move funds — trigger the full transfer rule set
 const TRANSFER_TYPES: Set<ActionType> = new Set(["HBAR_TRANSFER"]);
 
-// Roles permitted to submit transfer/payout actions
+// Roles permitted to perform any action
 const AUTHORISED_ROLES: Set<ActorRole> = new Set(["OPERATOR", "PARTNER", "ADMIN"]);
 
 // ── Individual rule checkers ──────────────────────────────────────────────────
