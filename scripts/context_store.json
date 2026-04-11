@@ -6,26 +6,12 @@
   },
 
   "actors": {
-    "0.0.100": {
+    "0.0.8570111": {
       "role": "OPERATOR",
-      "partner_id": "partner-alpha",
+      "partner_id": "sika-operator",
       "amount_threshold_hbar": 100.0,
-      "approved_recipients": ["0.0.800", "0.0.801"],
+      "approved_recipients": ["0.0.8570146"],
       "enforce_recipient_allowlist": true
-    },
-    "0.0.200": {
-      "role": "PARTNER",
-      "partner_id": "partner-beta",
-      "amount_threshold_hbar": 25.0,
-      "approved_recipients": ["0.0.800"],
-      "enforce_recipient_allowlist": true
-    },
-    "0.0.300": {
-      "role": "ADMIN",
-      "partner_id": "internal-ops",
-      "amount_threshold_hbar": 500.0,
-      "approved_recipients": [],
-      "enforce_recipient_allowlist": false
     }
   }
 }

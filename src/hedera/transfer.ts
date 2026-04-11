@@ -69,7 +69,7 @@ export class HederaSdkBackend implements TransferBackend {
       operatorId = AccountId.fromString(config.operatorId);
       operatorKey = PrivateKey.fromString(config.operatorKey);
       treasuryId = AccountId.fromString(config.treasuryId);
-      treasuryKey = PrivateKey.fromString(config.treasuryKey);
+      treasuryKey = PrivateKey.fromStringECDSA(config.treasuryKey);
       recipientId = AccountId.fromString(action.recipientId);
     } catch (err) {
       throw new TransferError(
@@ -131,15 +131,15 @@ export class HieroCLIBackend implements TransferBackend {
   async transfer(action: Action, config: HederaConfig): Promise<TransferResult> {
     const cmd = [
       this.cliBinary, "transfer",
-      "--network",      config.network,
-      "--operator-id",  config.operatorId,
+      "--network", config.network,
+      "--operator-id", config.operatorId,
       "--operator-key", config.operatorKey,
-      "--sender",       config.treasuryId,
-      "--sender-key",   config.treasuryKey,
-      "--recipient",    action.recipientId,
-      "--amount",       String(action.amountHbar),
-      "--unit",         "hbar",
-      "--output",       "json",
+      "--sender", config.treasuryId,
+      "--sender-key", config.treasuryKey,
+      "--recipient", action.recipientId,
+      "--amount", String(action.amountHbar),
+      "--unit", "hbar",
+      "--output", "json",
     ].join(" ");
 
     let stdout: string;

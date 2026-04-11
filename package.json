@@ -17,6 +17,7 @@
     "@hashgraph/sdk": "^2.50.0",
     "@langchain/core": "^0.3.0",
     "@langchain/openai": "^0.3.0",
+    "dotenv": "^17.4.1",
     "langchain": "^0.3.0",
     "next": "14.2.20",
     "react": "^18",

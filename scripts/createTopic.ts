@@ -17,7 +17,7 @@ async function main() {
     config.network === "testnet" ? Client.forTestnet() : Client.forMainnet();
   client.setOperator(
     AccountId.fromString(config.operatorId),
-    PrivateKey.fromString(config.operatorKey)
+    PrivateKey.fromStringECDSA(config.operatorKey)
   );
 
   const tx = await new TopicCreateTransaction()

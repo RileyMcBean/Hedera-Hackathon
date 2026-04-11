@@ -5,16 +5,14 @@ import type { PipelineResult } from "../src/runtime/pipeline";
 import type { AuditMessage } from "../src/schemas/audit";
 
 const DEMO_ACTORS = [
-  { id: "0.0.100", label: "0.0.100 — OPERATOR (100 HBAR limit)" },
-  { id: "0.0.200", label: "0.0.200 — PARTNER (25 HBAR limit)" },
-  { id: "0.0.300", label: "0.0.300 — ADMIN (500 HBAR limit, open access)" },
+  { id: "0.0.8570111", label: "0.0.8570111 — OPERATOR (100 HBAR limit)" },
 ];
 
 const DEMO_INSTRUCTIONS = [
-  "Send 5 HBAR to 0.0.800",
-  "Transfer 10 HBAR to 0.0.801",
-  "Pay 200 HBAR to 0.0.800",
-  "Send 5 HBAR to 0.0.999",
+  "Send 5 HBAR to 0.0.8570146",
+  "Transfer 10 HBAR to 0.0.8570146",
+  "Pay 200 HBAR to 0.0.8570146",
+  "Send 5 HBAR to 0.0.9999999",
 ];
 
 type DecisionBadge = {
