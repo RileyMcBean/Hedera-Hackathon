@@ -8,6 +8,7 @@
 import type { Action } from "../schemas/action";
 import type { PolicyResult } from "../schemas/policy";
 import type { ContextSnapshot } from "../context/loader";
+import type { AgentContext } from "../schemas/audit";
 import { loadContext } from "../context/loader";
 import { evaluatePolicy } from "../policy/engine";
 import { executeHbarTransfer } from "../hedera/transfer";
@@ -106,8 +107,11 @@ export function runPolicyOnly(action: Action): PipelineResult {
 /**
  * Full pipeline: policy evaluation → (if APPROVED) Hedera transfer → HCS audit.
  * The HCS audit is written for ALL outcomes (approved and denied).
+ *
+ * Pass agentContext when the action originated from the Intent Parser Agent so
+ * the audit event records what the parser believed about the instruction.
  */
-export async function run(action: Action): Promise<PipelineResult> {
+export async function run(action: Action, agentContext?: AgentContext): Promise<PipelineResult> {
   // Phase 1
   const phase1 = runPolicyOnly(action);
   if (phase1.stage === "ERROR") return phase1;
@@ -154,7 +158,7 @@ export async function run(action: Action): Promise<PipelineResult> {
   let hcsTopicId = "";
   let hcsSequenceNumber = -1;
   try {
-    const auditMsg = await recordAudit(action, policyResult!, txId);
+    const auditMsg = await recordAudit(action, policyResult!, txId, agentContext);
     hcsTopicId = auditMsg.topicId;
     hcsSequenceNumber = auditMsg.sequenceNumber;
     stage = "AUDITED";

@@ -157,13 +157,18 @@ export default function Home() {
         </div>
       )}
 
-      {/* Intent Agent card */}
+      {/* ── Stage 1: Intent Parser Agent ─────────────────────────────────────── */}
       {result?.parseResult && (
-        <section className="border border-indigo-800 rounded-lg p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-              Intent Agent
-            </span>
+        <section className={`rounded-lg p-4 space-y-3 border ${
+          result.parseResult.clarificationMessage
+            ? "border-amber-700 bg-amber-950/20"
+            : "border-indigo-800"
+        }`}>
+
+          {/* Header row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500 font-mono select-none">STAGE 1</span>
+            <span className="text-sm font-bold text-indigo-300">Intent Parser Agent</span>
             <span className={`text-xs px-2 py-0.5 rounded font-mono ${
               result.parseResult.parserMode === "heuristic"
                 ? "bg-indigo-900 text-indigo-300"
@@ -180,72 +185,85 @@ export default function Home() {
             }`}>
               {Math.round(result.parseResult.confidence * 100)}% confidence
             </span>
+            {result.parseResult.clarificationMessage ? (
+              <span className="ml-auto text-xs px-2 py-0.5 rounded bg-amber-900 text-amber-300 font-mono font-bold">
+                FLOW STOPPED
+              </span>
+            ) : (
+              <span className="ml-auto text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 font-mono">
+                PASSED
+              </span>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-400 font-mono">
-            <span className="text-gray-500">Intent</span>
+          {/* Raw instruction */}
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Raw instruction</p>
+            <p className="text-xs font-mono text-gray-300 bg-gray-900 rounded px-2 py-1 break-all">
+              {result.parseResult.workflowContext.rawInstruction}
+            </p>
+          </div>
+
+          {/* Extracted fields grid */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs font-mono">
+            <span className="text-gray-500">Action type</span>
             <span className="text-gray-200">{result.parseResult.workflowContext.detectedIntent}</span>
 
             <span className="text-gray-500">Amount</span>
-            <span className="text-gray-200">
+            <span className={result.parseResult.workflowContext.extractedAmount !== null ? "text-gray-200" : "text-gray-600"}>
               {result.parseResult.workflowContext.extractedAmount !== null
                 ? `${result.parseResult.workflowContext.extractedAmount} HBAR`
-                : "—"}
+                : "not found"}
             </span>
 
             <span className="text-gray-500">Recipient</span>
-            <span className="text-gray-200">
-              {result.parseResult.workflowContext.extractedRecipient ?? "—"}
+            <span className={result.parseResult.workflowContext.extractedRecipient !== null ? "text-gray-200" : "text-gray-600"}>
+              {result.parseResult.workflowContext.extractedRecipient ?? "not found"}
             </span>
 
             <span className="text-gray-500">Actor</span>
             <span className="text-gray-200">{result.parseResult.action.actorId}</span>
           </div>
 
+          {/* Parse errors */}
           {result.parseResult.parseErrors.length > 0 && (
-            <ul className="mt-1 space-y-0.5">
+            <ul className="space-y-0.5">
               {result.parseResult.parseErrors.map((e, i) => (
-                <li key={i} className="text-xs text-yellow-500">
-                  ⚠ {e}
-                </li>
+                <li key={i} className="text-xs text-yellow-500">⚠ {e}</li>
               ))}
             </ul>
           )}
 
           {/* Medium-confidence warnings */}
           {result.parseResult.parseWarnings.length > 0 && (
-            <ul className="mt-1 space-y-0.5">
+            <ul className="space-y-0.5">
               {result.parseResult.parseWarnings.map((w, i) => (
-                <li key={i} className="text-xs text-orange-400">
-                  ⚡ {w}
-                </li>
+                <li key={i} className="text-xs text-orange-400">⚡ {w}</li>
               ))}
             </ul>
+          )}
+
+          {/* Clarification block — inline, co-located with the stage that raised it */}
+          {result.parseResult.clarificationMessage && (
+            <div className="border-t border-amber-800 pt-3 space-y-1">
+              <p className="text-xs font-semibold text-amber-400">Clarification needed</p>
+              <p className="text-sm text-amber-200">{result.parseResult.clarificationMessage}</p>
+              <p className="text-xs text-amber-600">
+                This instruction was not forwarded to the policy engine or execution layer.
+                Revise and resubmit.
+              </p>
+            </div>
           )}
         </section>
       )}
 
-      {/* Clarification banner — shown instead of Decision when parse is blocked */}
-      {result?.parseResult?.clarificationMessage && (
-        <section className="border border-amber-700 bg-amber-950/40 rounded-lg p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-amber-400">Clarification needed</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-amber-900 text-amber-300 font-mono">
-              PARSE_BLOCKED
-            </span>
-          </div>
-          <p className="text-sm text-amber-200">{result.parseResult.clarificationMessage}</p>
-          <p className="text-xs text-amber-500">
-            The instruction was not forwarded to the policy engine or execution layer.
-            Please revise your instruction and resubmit.
-          </p>
-        </section>
-      )}
-
-      {/* Decision panel — only shown when parse proceeded */}
+      {/* ── Stage 2: Policy + Execution ──────────────────────────────────────── */}
       {result && !result.parseResult?.clarificationMessage && (
         <section className="space-y-3 border border-gray-800 rounded-lg p-4">
-          <h2 className="text-lg font-semibold text-gray-200">Decision</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 font-mono select-none">STAGE 2</span>
+            <h2 className="text-sm font-bold text-gray-200">Policy Engine &amp; Execution</h2>
+          </div>
           {badge && (
             <span className={`inline-block px-3 py-1 rounded text-sm font-bold ${badge.className}`}>
               {badge.label}
@@ -409,14 +427,36 @@ export default function Home() {
                   key={msg.correlationId}
                   className="border border-gray-800 rounded p-3 text-xs space-y-1"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${b.className}`}>
                       {b.label}
                     </span>
                     <span className="text-gray-500">#{msg.sequenceNumber}</span>
                     <span className="text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
+                    {msg.agentContext && (
+                      <>
+                        <span className="text-gray-600">·</span>
+                        <span className="font-mono text-indigo-400">{msg.agentContext.parserMode}</span>
+                        <span className={`font-mono ${
+                          msg.agentContext.confidence >= 0.8
+                            ? "text-green-500"
+                            : msg.agentContext.confidence >= 0.5
+                            ? "text-yellow-500"
+                            : "text-red-500"
+                        }`}>
+                          {Math.round(msg.agentContext.confidence * 100)}%
+                        </span>
+                      </>
+                    )}
                   </div>
-                  <p className="text-gray-400">{msg.action.rawInstruction}</p>
+                  <p className="text-gray-400 font-mono">{msg.action.rawInstruction}</p>
+                  {msg.agentContext?.parseWarnings && msg.agentContext.parseWarnings.length > 0 && (
+                    <ul className="space-y-0.5">
+                      {msg.agentContext.parseWarnings.map((w, i) => (
+                        <li key={i} className="text-orange-500">⚡ {w}</li>
+                      ))}
+                    </ul>
+                  )}
                   {msg.txId && (
                     <a
                       href={`${hashscanBase}/${msg.txId}`}

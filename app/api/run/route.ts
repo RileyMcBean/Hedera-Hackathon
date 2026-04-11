@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseInstruction } from "../../../src/agents/intentParser";
 import { run } from "../../../src/runtime/pipeline";
+import type { AgentContext } from "../../../src/schemas/audit";
 
 export async function POST(req: NextRequest) {
   let body: { instruction?: string; actorId?: string };
@@ -47,8 +48,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Build agent context to embed in the audit event
+    const agentContext: AgentContext = {
+      parserMode: parseResult.parserMode,
+      confidence: parseResult.confidence,
+      parseWarnings: parseResult.parseWarnings,
+      rawInstruction: parseResult.workflowContext.rawInstruction,
+    };
+
     // Stage 2: Runtime pipeline — policy + execution + audit
-    const pipelineResult = await run(parseResult.action);
+    const pipelineResult = await run(parseResult.action, agentContext);
 
     // Merge: pipeline result fields stay top-level; parseResult is nested
     return NextResponse.json({ ...pipelineResult, parseResult });

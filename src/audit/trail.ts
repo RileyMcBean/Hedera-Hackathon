@@ -7,18 +7,21 @@
 
 import type { Action } from "../schemas/action";
 import type { PolicyResult } from "../schemas/policy";
-import type { AuditMessage } from "../schemas/audit";
+import type { AuditMessage, AgentContext } from "../schemas/audit";
 import { submitMessage, fetchMessages } from "../hedera/hcs";
 
 /**
  * Build an AuditMessage and submit it to the HCS audit topic.
  *
  * Called for ALL outcomes — approved, denied, manual review, etc.
+ * agentContext is optional; pass it when the action originated from the
+ * Intent Parser Agent so the audit event captures what the agent believed.
  */
 export async function record(
   action: Action,
   policyResult: PolicyResult,
-  txId = ""
+  txId = "",
+  agentContext?: AgentContext
 ): Promise<AuditMessage> {
   const msg: AuditMessage = {
     correlationId: action.correlationId,
@@ -28,6 +31,7 @@ export async function record(
     txId,
     topicId: "",
     sequenceNumber: -1,
+    ...(agentContext !== undefined ? { agentContext } : {}),
   };
 
   return submitMessage(msg);
