@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ─────────────────────────────────────────────────── */
+/* OKLCH for perceptual uniformity. Neutrals tinted toward teal brand hue. */
+:root {
+  /* Surfaces — very dark, tinted faintly toward hue 174 (teal) */
+  --bg:          oklch(0.08 0.012 230);   /* outermost background */
+  --surface:     oklch(0.12 0.014 230);   /* card / panel surfaces */
+  --surface-alt: oklch(0.10 0.013 230);   /* recessed / input areas */
+  --surface-hi:  oklch(0.15 0.015 230);   /* elevated surfaces */
+
+  /* Borders */
+  --border:      oklch(0.22 0.018 230);
+  --border-hi:   oklch(0.30 0.020 230);
+
+  /* Text */
+  --text:        oklch(0.93 0.008 230);   /* primary — not pure white */
+  --muted:       oklch(0.60 0.020 240);   /* secondary */
+  --faint:       oklch(0.38 0.016 240);   /* very subtle labels */
+
+  /* Verdict colors — OKLCH gives clean, vivid hues */
+  --approved:      oklch(0.76 0.17 174);   /* teal  #00d4aa */
+  --denied:        oklch(0.58 0.22 16);    /* red   #e94560 */
+  --pending:       oklch(0.78 0.16 60);    /* amber #f5a623 */
+
+  /* Tinted surfaces — for verdict-colored card backgrounds */
+  --approved-bg:   oklch(0.76 0.17 174 / 0.07);
+  --denied-bg:     oklch(0.58 0.22 16  / 0.07);
+  --pending-bg:    oklch(0.78 0.16 60  / 0.07);
+
+  /* Tinted borders — for verdict-colored card borders */
+  --approved-border: oklch(0.76 0.17 174 / 0.28);
+  --denied-border:   oklch(0.58 0.22 16  / 0.28);
+  --pending-border:  oklch(0.78 0.16 60  / 0.28);
+
+  /* Spacing scale — 4pt base */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10:40px;
+  --space-12:48px;
+
+  /* Typography — JetBrains Mono for data precision, Manrope for UI clarity */
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-body: 'Manrope', system-ui, sans-serif;
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-hi);
+  border-radius: 2px;
+}
+
+/* ─── Pipeline keyframes ─────────────────────────────────────────────── */
+
+@keyframes ring-pulse {
+  0%   { box-shadow: 0 0 0 0   oklch(0.78 0.16 60 / 0.6),
+                    0 0 12px 0  oklch(0.78 0.16 60 / 0.3); }
+  60%  { box-shadow: 0 0 0 6px oklch(0.78 0.16 60 / 0),
+                    0 0 20px 4px oklch(0.78 0.16 60 / 0.5); }
+  100% { box-shadow: 0 0 0 0   oklch(0.78 0.16 60 / 0),
+                    0 0 12px 0  oklch(0.78 0.16 60 / 0); }
+}
+
+@keyframes ring-pulse-approved {
+  0%   { box-shadow: 0 0 0 0   oklch(0.76 0.17 174 / 0.6),
+                    0 0 12px 0  oklch(0.76 0.17 174 / 0.3); }
+  60%  { box-shadow: 0 0 0 6px oklch(0.76 0.17 174 / 0),
+                    0 0 20px 4px oklch(0.76 0.17 174 / 0.5); }
+  100% { box-shadow: 0 0 0 0   oklch(0.76 0.17 174 / 0),
+                    0 0 12px 0  oklch(0.76 0.17 174 / 0); }
+}
+
+@keyframes track-fill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-top {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes verdict-reveal {
+  0%   { opacity: 0; transform: scale(0.95) translateY(4px); }
+  60%  { opacity: 1; transform: scale(1.01) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes scan {
+  from { background-position: 0 0; }
+  to   { background-position: 0 100%; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ─── Animation utilities ────────────────────────────────────────────── */
+.anim-fade-up     { animation: fade-up     0.3s cubic-bezier(0.22,1,0.36,1) forwards; }
+.anim-slide-top   { animation: slide-in-top 0.25s cubic-bezier(0.22,1,0.36,1) forwards; }
+.anim-verdict     { animation: verdict-reveal 0.4s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+/* ─── Scanline overlay (subtle texture on dark panels) ───────────────── */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    oklch(0 0 0 / 0.06) 2px,
+    oklch(0 0 0 / 0.06) 4px
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}

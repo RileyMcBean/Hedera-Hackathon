@@ -1,3 +1,131 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Google Fonts (loaded via layout.tsx) ──────────────────────────────────── */
+
+/* ── OKLCH Design Tokens ───────────────────────────────────────────────────── */
+:root {
+  /* Background layers */
+  --bg:          oklch(0.08 0.012 230);
+  --surface:     oklch(0.12 0.014 230);
+  --surface-alt: oklch(0.10 0.013 230);
+
+  /* Semantic verdict colors */
+  --approved:        oklch(0.76 0.17 174);   /* teal  #00d4aa */
+  --denied:          oklch(0.58 0.22 16);    /* red   #e94560 */
+  --pending:         oklch(0.78 0.16 60);    /* amber #f5a623 */
+
+  /* Tinted backgrounds for verdict cards */
+  --approved-bg:     oklch(0.76 0.17 174 / 0.07);
+  --denied-bg:       oklch(0.58 0.22 16  / 0.07);
+  --pending-bg:      oklch(0.78 0.16 60  / 0.07);
+
+  /* Tinted borders for verdict cards */
+  --approved-border: oklch(0.76 0.17 174 / 0.28);
+  --denied-border:   oklch(0.58 0.22 16  / 0.28);
+  --pending-border:  oklch(0.78 0.16 60  / 0.28);
+
+  /* Text hierarchy */
+  --text:  oklch(0.94 0.010 230);
+  --muted: oklch(0.60 0.020 240);
+  --faint: oklch(0.40 0.016 240);
+
+  /* UI chrome */
+  --border: oklch(0.20 0.016 230);
+
+  /* Typography — injected by next/font via layout.tsx variables */
+  --font-mono: var(--next-font-mono), ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+  --font-body: var(--next-font-body), system-ui, -apple-system, sans-serif;
+}
+
+/* ── Base reset ────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Keyframe animations ───────────────────────────────────────────────────── */
+
+/* Ring pulse — used on active pipeline stage nodes */
+@keyframes ring-pulse {
+  0%   { box-shadow: 0 0 0 0   oklch(0.78 0.16 60 / 0.55); }
+  70%  { box-shadow: 0 0 0 8px oklch(0.78 0.16 60 / 0); }
+  100% { box-shadow: 0 0 0 0   oklch(0.78 0.16 60 / 0); }
+}
+
+/* Verdict card entrance — result card appears from below with fade */
+@keyframes verdict-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Audit card slide in from top */
+@keyframes slide-top {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Utility animation classes ─────────────────────────────────────────────── */
+.anim-verdict {
+  animation: verdict-reveal 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.anim-slide-top {
+  animation: slide-top 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ── Scrollbar styling ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.25 0.016 230);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.32 0.018 230);
+}
+
+/* ── Select element reset ──────────────────────────────────────────────────── */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* ── Placeholder color ─────────────────────────────────────────────────────── */
+::placeholder {
+  color: var(--faint);
+}

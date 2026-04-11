@@ -1,258 +1,307 @@
 "use client";
 
-import { useState } from "react";
-import type { PipelineResult } from "../src/runtime/pipeline";
-import type { AuditMessage } from "../src/schemas/audit";
+import { useCallback, useEffect, useState } from "react";
+import { getAudit, submitIntent } from "./lib/api";
+import { Header } from "./components/Header";
+import { IntentInput } from "./components/IntentInput";
+import { PipelineView } from "./components/PipelineView";
+import { PolicyList } from "./components/PolicyList";
+import { ResultCard } from "./components/ResultCard";
+import { AuditTrail } from "./components/AuditTrail";
+import type { Actor, AuditRecord, IntentResponse, Policy, PipelineStages } from "./lib/types";
 
-const DEMO_ACTORS = [
-  { id: "0.0.100", label: "0.0.100 — OPERATOR (100 HBAR limit)" },
-  { id: "0.0.200", label: "0.0.200 — PARTNER (25 HBAR limit)" },
-  { id: "0.0.300", label: "0.0.300 — ADMIN (500 HBAR limit, open access)" },
+// Hard-coded from scripts/context_store.json — no /api/actors endpoint exists
+const ACTORS: Actor[] = [
+  {
+    id: "0.0.100",
+    role: "OPERATOR",
+    amount_threshold_hbar: 100,
+    approved_recipients: ["0.0.800", "0.0.801"],
+    enforce_recipient_allowlist: true,
+  },
+  {
+    id: "0.0.200",
+    role: "PARTNER",
+    amount_threshold_hbar: 25,
+    approved_recipients: ["0.0.800"],
+    enforce_recipient_allowlist: true,
+  },
+  {
+    id: "0.0.300",
+    role: "ADMIN",
+    amount_threshold_hbar: 500,
+    approved_recipients: [],
+    enforce_recipient_allowlist: false,
+  },
 ];
 
-const DEMO_INSTRUCTIONS = [
-  "Send 5 HBAR to 0.0.800",
-  "Transfer 10 HBAR to 0.0.801",
-  "Pay 200 HBAR to 0.0.800",
-  "Send 5 HBAR to 0.0.999",
+// Hard-coded policies — no /api/policies endpoint exists
+const POLICIES: Policy[] = [
+  { id: "ACTOR_AUTHORISED",    description: "Actor must be registered in the context store." },
+  { id: "TREASURY_POSTURE",    description: "Treasury must not be frozen or restricted." },
+  { id: "RECIPIENT_ALLOWLIST", description: "Recipient must be on the actor's approved list (when enforced)." },
+  { id: "AMOUNT_THRESHOLD",    description: "Transfer amount must not exceed the actor's per-transaction HBAR limit." },
 ];
 
-type DecisionBadge = {
-  label: string;
-  className: string;
+const IDLE_PIPELINE: PipelineStages = {
+  intent: "idle", context: "idle", policy: "idle", execution: "idle", evidence: "idle",
 };
 
-function getBadge(decision?: string): DecisionBadge {
-  switch (decision) {
-    case "APPROVED":
-      return { label: "APPROVED", className: "bg-green-700 text-green-100" };
-    case "DENIED":
-      return { label: "DENIED", className: "bg-red-700 text-red-100" };
-    case "APPROVAL_REQUIRED":
-      return { label: "APPROVAL REQUIRED", className: "bg-yellow-700 text-yellow-100" };
-    case "MANUAL_REVIEW":
-      return { label: "MANUAL REVIEW", className: "bg-orange-700 text-orange-100" };
-    default:
-      return { label: decision ?? "UNKNOWN", className: "bg-gray-700 text-gray-100" };
-  }
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default function Home() {
-  const [instruction, setInstruction] = useState("");
-  const [actorId, setActorId] = useState(DEMO_ACTORS[0].id);
-  const [result, setResult] = useState<PipelineResult | null>(null);
-  const [auditLog, setAuditLog] = useState<AuditMessage[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [replayLoading, setReplayLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [result, setResult] = useState<IntentResponse | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [pipeline, setPipeline] = useState<PipelineStages>(IDLE_PIPELINE);
+  const [latestId, setLatestId] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!instruction.trim()) return;
-    setLoading(true);
-    setError("");
+  useEffect(() => {
+    getAudit()
+      .then(d => setAuditRecords([...d.records].reverse()))
+      .catch(() => {});
+  }, []);
+
+  const refreshAudit = useCallback(async () => {
+    try {
+      const data = await getAudit();
+      setAuditRecords([...data.records].reverse());
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  const handleSubmit = useCallback(async (text: string, actorId: string) => {
+    setSubmitting(true);
     setResult(null);
+    setError(null);
+    setPipeline(IDLE_PIPELINE);
 
+    setPipeline(p => ({ ...p, intent: "active" }));
+    const apiPromise = submitIntent(text, actorId);
+
+    await delay(350);
+    setPipeline(p => ({ ...p, intent: "complete", context: "active" }));
+
+    await delay(350);
+    setPipeline(p => ({ ...p, context: "complete", policy: "active" }));
+
+    let response: IntentResponse;
     try {
-      const res = await fetch("/api/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction, actorId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Request failed");
-      setResult(data);
+      response = await Promise.race([
+        apiPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Request timed out after 15s")), 15000)
+        ),
+      ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
+      setPipeline(IDLE_PIPELINE);
+      setError(err instanceof Error ? err.message : "Request failed");
+      setSubmitting(false);
+      return;
     }
-  }
 
-  async function handleReplay() {
-    setReplayLoading(true);
-    try {
-      const res = await fetch("/api/audit/replay");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Replay failed");
-      setAuditLog(data.messages ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setReplayLoading(false);
+    await delay(300);
+    setPipeline(p => ({ ...p, policy: "complete" }));
+
+    const approved = response.decision.verdict === "approved";
+    await delay(200);
+
+    if (approved) {
+      setPipeline(p => ({ ...p, execution: "active" }));
+      await delay(350);
+      setPipeline(p => ({ ...p, execution: "complete", evidence: "active" }));
+    } else {
+      setPipeline(p => ({ ...p, execution: "skipped", evidence: "active" }));
     }
-  }
 
-  const badge = result?.policyResult ? getBadge(result.policyResult.decision) : null;
-  const hashscanBase = "https://hashscan.io/testnet/transaction";
+    await delay(350);
+    setPipeline(p => ({ ...p, evidence: "complete" }));
+
+    setResult(response);
+    setLatestId(response.intent_id);
+    await refreshAudit();
+    setSubmitting(false);
+  }, [refreshAudit]);
+
+  const handleReset = useCallback(() => {
+    setResult(null);
+    setLatestId(undefined);
+    setPipeline(IDLE_PIPELINE);
+    setError(null);
+    setAuditRecords([]);
+  }, []);
+
+  const handleReplay = useCallback(async () => {
+    await refreshAudit();
+  }, [refreshAudit]);
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-8">
-      {/* Header */}
-      <div className="border-b border-gray-800 pb-4">
-        <h1 className="text-2xl font-bold text-white">Sika Sentinel</h1>
-        <p className="text-gray-400 text-sm mt-1">
-          Runtime governance and evidence layer for delegated financial actions on Hedera
-        </p>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <Header onReset={handleReset} />
 
-      {/* Instruction input */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-200">Submit Instruction</h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Actor</label>
-            <select
-              value={actorId}
-              onChange={(e) => setActorId(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100"
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        {/* Left sidebar: policies + actors */}
+        <aside
+          style={{
+            width: "260px",
+            flexShrink: 0,
+            background: "var(--surface)",
+            borderRight: "1px solid var(--border)",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <PolicyList policies={POLICIES} actors={ACTORS} />
+        </aside>
+
+        {/* Center main */}
+        <main
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+            minWidth: 0,
+          }}
+        >
+          <IntentInput actors={ACTORS} onSubmit={handleSubmit} submitting={submitting} />
+          <PipelineView stages={pipeline} />
+
+          {error && (
+            <div
+              style={{
+                background: "rgba(233,69,96,0.1)",
+                border: "1px solid rgba(233,69,96,0.4)",
+                borderRadius: "6px",
+                padding: "12px 16px",
+                fontFamily: "var(--font-body)",
+                fontSize: "13px",
+                color: "#e94560",
+              }}
             >
-              {DEMO_ACTORS.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Natural-language instruction
-            </label>
-            <textarea
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              rows={3}
-              placeholder="e.g. Send 5 HBAR to 0.0.800"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-500 resize-none"
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {DEMO_INSTRUCTIONS.map((instr) => (
-              <button
-                key={instr}
-                type="button"
-                onClick={() => setInstruction(instr)}
-                className="text-xs px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-gray-300"
+              {error}
+            </div>
+          )}
+
+          {result && <ResultCard result={result} />}
+
+          {!result && !submitting && !error && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "32px 40px",
+                gap: "24px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "8px",
+                  opacity: 0.45,
+                }}
               >
-                {instr}
-              </button>
-            ))}
-          </div>
-          <button
-            type="submit"
-            disabled={loading || !instruction.trim()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium"
-          >
-            {loading ? "Processing..." : "Submit"}
-          </button>
-        </form>
-      </section>
-
-      {/* Error */}
-      {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded p-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      {/* Decision panel */}
-      {result && (
-        <section className="space-y-3 border border-gray-800 rounded-lg p-4">
-          <h2 className="text-lg font-semibold text-gray-200">Decision</h2>
-          {badge && (
-            <span className={`inline-block px-3 py-1 rounded text-sm font-bold ${badge.className}`}>
-              {badge.label}
-            </span>
-          )}
-          {result.policyResult?.denialReason && (
-            <p className="text-sm text-gray-400">
-              <span className="text-gray-300">Reason:</span>{" "}
-              {result.policyResult.denialReason}
-            </p>
-          )}
-          {result.policyResult?.denialDetail && (
-            <p className="text-sm text-gray-500">{result.policyResult.denialDetail}</p>
-          )}
-          {result.txId && (
-            <p className="text-sm">
-              <span className="text-gray-400">Tx ID: </span>
-              <a
-                href={`${hashscanBase}/${result.txId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline break-all"
-              >
-                {result.txId}
-              </a>
-            </p>
-          )}
-          {result.hcsTopicId && (
-            <p className="text-sm text-gray-400">
-              HCS sequence #{result.hcsSequenceNumber} on topic {result.hcsTopicId}
-            </p>
-          )}
-          <details className="text-xs text-gray-500">
-            <summary className="cursor-pointer hover:text-gray-400">
-              Rules evaluated
-            </summary>
-            <ul className="mt-1 ml-4 list-disc">
-              {result.policyResult?.evaluatedRules.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          </details>
-        </section>
-      )}
-
-      {/* Audit replay */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-200">Audit Replay</h2>
-          <button
-            onClick={handleReplay}
-            disabled={replayLoading}
-            className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm"
-          >
-            {replayLoading ? "Loading..." : "Refresh"}
-          </button>
-        </div>
-        {auditLog.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            Click Refresh to load the on-chain audit history.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {auditLog.map((msg) => {
-              const b = getBadge(msg.policyResult.decision);
-              return (
-                <div
-                  key={msg.correlationId}
-                  className="border border-gray-800 rounded p-3 text-xs space-y-1"
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                  <path
+                    d="M20 3L4 9.5V18C4 27.6 11 36.4 20 38.5C29 36.4 36 27.6 36 18V9.5L20 3Z"
+                    stroke="var(--muted)"
+                    strokeWidth="1.25"
+                    fill="oklch(0.60 0.020 240 / 0.06)"
+                  />
+                  <path d="M14 20l4 4L26 16" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                  }}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${b.className}`}>
-                      {b.label}
-                    </span>
-                    <span className="text-gray-500">#{msg.sequenceNumber}</span>
-                    <span className="text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
-                  </div>
-                  <p className="text-gray-400">{msg.action.rawInstruction}</p>
-                  {msg.txId && (
-                    <a
-                      href={`${hashscanBase}/${msg.txId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline"
+                  Awaiting intent
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "12px",
+                  width: "100%",
+                  maxWidth: "480px",
+                }}
+              >
+                {[
+                  { num: "01", title: "Select actor", desc: "Choose which operator submits the intent and inherits their policy limits." },
+                  { num: "02", title: "Enter intent",  desc: "Type a natural-language payout or treasury instruction, or load a demo beat." },
+                  { num: "03", title: "Watch clearance", desc: "Each stage lights up as it runs. The verdict and HCS audit entry appear instantly." },
+                ].map(step => (
+                  <div
+                    key={step.num}
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "5px",
+                      padding: "12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        color: "var(--faint)",
+                        letterSpacing: "0.1em",
+                        marginBottom: "6px",
+                      }}
                     >
-                      View on HashScan
-                    </a>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    </main>
+                      {step.num}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: "12px", fontWeight: 700, color: "var(--text)", marginBottom: "4px" }}>
+                      {step.title}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: "11px", color: "var(--muted)", lineHeight: "1.5" }}>
+                      {step.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </main>
+
+        {/* Right panel: audit trail */}
+        <aside
+          style={{
+            width: "320px",
+            flexShrink: 0,
+            background: "var(--surface)",
+            borderLeft: "1px solid var(--border)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <AuditTrail
+            records={auditRecords}
+            onReplay={handleReplay}
+            replaying={false}
+            latestId={latestId}
+          />
+        </aside>
+      </div>
+    </div>
   );
 }
