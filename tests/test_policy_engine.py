@@ -42,6 +42,7 @@ def make_context(**overrides) -> ContextSnapshot:
         amount_threshold_hbar=100.0,
         approved_recipients=["0.0.800", "0.0.801"],
         treasury_posture=TreasuryPosture.NORMAL,
+        enforce_recipient_allowlist=True,
     )
     return ContextSnapshot(**(defaults | overrides))
 
@@ -148,14 +149,23 @@ def test_r005_denies_recipient_not_on_list():
     assert R005 in result.evaluated_rules
 
 
-def test_r005_skipped_when_approved_list_is_empty():
-    # Empty list = open access; any recipient should pass R005
+def test_r005_skipped_when_enforcement_disabled():
+    # enforce_recipient_allowlist=False bypasses R005 entirely
     result = evaluate_policy(
         make_action(recipient_id="0.0.999"),
-        make_context(approved_recipients=[]),
+        make_context(approved_recipients=["0.0.800"], enforce_recipient_allowlist=False),
     )
-    # R005 is skipped; action should be APPROVED (all other rules pass)
     assert result.decision == Decision.APPROVED
+
+
+def test_r005_enforced_even_with_empty_list_when_flag_true():
+    # enforce=True + empty list → all recipients denied (actor misconfigured but safe default)
+    result = evaluate_policy(
+        make_action(recipient_id="0.0.999"),
+        make_context(approved_recipients=[], enforce_recipient_allowlist=True),
+    )
+    assert result.decision == Decision.DENIED
+    assert result.denial_reason == DenialReason.RECIPIENT_NOT_APPROVED
 
 
 def test_r005_passes_for_approved_recipient():

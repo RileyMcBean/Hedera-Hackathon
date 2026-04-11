@@ -135,14 +135,12 @@ def _check_treasury_not_frozen(action: Action, context: ContextSnapshot) -> Poli
 def _check_recipient_approved(action: Action, context: ContextSnapshot) -> PolicyResult | None:
     """R005 — recipient must be on the actor's approved list.
 
-    Enforcement is active only when approved_recipients is non-empty.
-    An empty list means the actor has open-access (useful for ADMIN roles
-    or actors whose allowlist has not been configured yet).
+    Skipped entirely when context.enforce_recipient_allowlist is False,
+    giving that actor open access regardless of the approved_recipients list.
     """
     if action.action_type not in _TRANSFER_TYPES:
         return None
-    if not context.approved_recipients:
-        # Open access — skip enforcement
+    if not context.enforce_recipient_allowlist:
         return None
     if action.recipient_id not in context.approved_recipients:
         return PolicyResult(

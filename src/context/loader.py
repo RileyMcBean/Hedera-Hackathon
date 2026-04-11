@@ -58,6 +58,11 @@ class ContextSnapshot(BaseModel):
     amount_threshold_hbar: float             # max single-transfer for this actor
     approved_recipients: list[str] = Field(default_factory=list)
     treasury_posture: TreasuryPosture = TreasuryPosture.NORMAL
+    enforce_recipient_allowlist: bool = True
+    # When True  — R005 denies any recipient not in approved_recipients.
+    # When False — R005 is skipped entirely (open access for this actor).
+    # Actors with an empty approved_recipients list and enforce=True will
+    # deny *all* recipients; set enforce=False for genuinely open actors.
 
 
 # Backwards-compatible alias used by existing tests
@@ -71,6 +76,7 @@ class _ActorRecord(BaseModel):
     partner_id: str
     amount_threshold_hbar: float
     approved_recipients: list[str] = Field(default_factory=list)
+    enforce_recipient_allowlist: bool = True
 
 
 class _TreasuryRecord(BaseModel):
@@ -93,6 +99,7 @@ _FALLBACK_STORE = _ContextStore(
             partner_id="partner-alpha",
             amount_threshold_hbar=100.0,
             approved_recipients=["0.0.800", "0.0.801"],
+            enforce_recipient_allowlist=True,
         ),
         # Demo partner with a tighter threshold
         "0.0.200": _ActorRecord(
@@ -100,6 +107,7 @@ _FALLBACK_STORE = _ContextStore(
             partner_id="partner-beta",
             amount_threshold_hbar=25.0,
             approved_recipients=["0.0.800"],
+            enforce_recipient_allowlist=True,
         ),
     },
 )
@@ -185,6 +193,7 @@ def load_context(
         amount_threshold_hbar=actor.amount_threshold_hbar,
         approved_recipients=actor.approved_recipients,
         treasury_posture=store.treasury.posture,
+        enforce_recipient_allowlist=actor.enforce_recipient_allowlist,
     )
 
 
