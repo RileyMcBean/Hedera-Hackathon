@@ -1,40 +1,36 @@
 """
-Pipeline orchestrator — wires the full Sentinel flow together.
+App-layer pipeline entry point.
 
-Called by the demo UI (app/demo.py) and the CLI entrypoint (main.py).
+Thin shim used by the Streamlit demo (app/demo.py) and the CLI (main.py).
+Delegates to src/runtime/pipeline.py — do not add business logic here.
 
-Flow:
-  parse_instruction → load_context → evaluate → [execute_transfer] → record
+Phase 1: run_policy_only()  — context + policy, no Hedera
+Phase 2: run()              — will add execution + audit once Hedera adapters exist
 """
 
 from __future__ import annotations
 
-from src.agents.intent_parser import parse_instruction
-from src.audit import trail
-from src.context.loader import load_context
-from src.hedera import transfer
-from src.policy import engine
-from src.schemas.audit import AuditMessage
-from src.schemas.policy import Decision
+from src.runtime.pipeline import PipelineResult, PipelineStage, run_policy_only
+from src.schemas.action import Action
+
+__all__ = ["PipelineResult", "PipelineStage", "run_policy_only"]
 
 
-def run(raw_instruction: str, actor_id: str) -> AuditMessage:
+def run(action: Action) -> PipelineResult:
     """
-    Run the full governed payout pipeline for one instruction.
+    Full governed payout pipeline (phase 2 stub).
+
+    Currently delegates to run_policy_only().  When src/hedera/transfer.py
+    and src/audit/trail.py are implemented, this function will:
+      1. Call run_policy_only(action)
+      2. If approved: execute HBAR transfer, populate result.tx_id
+      3. Write HCS audit entry, populate result.hcs_topic_id + hcs_sequence_number
+      4. Return result with stage=AUDITED
 
     Args:
-        raw_instruction: Natural-language operator input.
-        actor_id:        Hedera account ID of the requesting actor.
+        action: Structured payout action.
 
     Returns:
-        The submitted AuditMessage (contains action, policy result, tx_id, HCS ref).
+        PipelineResult — stage=POLICY_EVALUATED until phase 2 is wired.
     """
-    action = parse_instruction(raw_instruction, actor_id)
-    context = load_context(action.actor_id, action.recipient_id)
-    policy_result = engine.evaluate(action, context)
-
-    tx_id = ""
-    if policy_result.decision == Decision.APPROVED:
-        tx_id = transfer.execute_transfer(action)
-
-    return trail.record(action, policy_result, tx_id)
+    return run_policy_only(action)
