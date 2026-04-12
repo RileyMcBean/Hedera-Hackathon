@@ -15,12 +15,21 @@ from src.schemas.action import Action
 from src.schemas.policy import PolicyResult
 
 
+class ParseResult(BaseModel):
+    """Outcome of the instruction parsing step."""
+
+    confidence: float = 1.0
+    proceeded: bool = True
+    detail: str = ""
+
+
 class AuditMessage(BaseModel):
     """Immutable evidence record submitted to the HCS audit topic."""
 
     correlation_id: str            # matches Action.correlation_id
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     action: Action
+    parse_result: ParseResult | None = None
     policy_result: PolicyResult
     tx_id: str = ""               # Hedera transaction ID (populated on APPROVED path)
     topic_id: str = ""            # HCS topic ID (populated after submission)
