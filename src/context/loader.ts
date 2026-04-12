@@ -174,3 +174,49 @@ export function loadContext(
 export function getTreasuryPosture(): TreasuryPosture {
   return loadStore().treasury.posture;
 }
+
+/**
+ * Add a recipient account ID to the approved list for the given actor.
+ * Persists the change to the store file so it survives process restarts.
+ * No-ops silently if the recipient is already present.
+ *
+ * @throws {Error} If actorId is not registered.
+ */
+export function addApprovedRecipient(actorId: string, recipientId: string): void {
+  const store = loadStore();
+
+  if (!(actorId in store.actors)) {
+    const known = Object.keys(store.actors);
+    throw new Error(
+      `Actor '${actorId}' is not registered. Known actors: ${JSON.stringify(known)}`
+    );
+  }
+
+  const actor = store.actors[actorId];
+  if (actor.approved_recipients.includes(recipientId)) return;
+
+  actor.approved_recipients.push(recipientId);
+
+  // Persist to file so the change survives restarts
+  const storePath = resolveStorePath();
+  try {
+    // Read raw file to preserve comments/_comment field, then replace actors block
+    const existing = JSON.parse(fs.readFileSync(storePath, "utf-8"));
+    existing.actors[actorId].approved_recipients = actor.approved_recipients;
+    fs.writeFileSync(storePath, JSON.stringify(existing, null, 2) + "\n", "utf-8");
+  } catch {
+    // File write failure is non-fatal — the in-memory change still takes effect
+  }
+}
+
+/**
+ * Return the current approved recipients list for an actor.
+ * @throws {Error} If actorId is not registered.
+ */
+export function getApprovedRecipients(actorId: string): string[] {
+  const store = loadStore();
+  if (!(actorId in store.actors)) {
+    throw new Error(`Actor '${actorId}' is not registered.`);
+  }
+  return [...store.actors[actorId].approved_recipients];
+}

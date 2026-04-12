@@ -11,23 +11,23 @@ const DEMO_ACTORS = [
 ];
 
 const DEMO_INSTRUCTIONS: { label: string; text: string; tag: string; tagClass: string }[] = [
-  // ── Approved transfers ────────────────────────────────────────────────────
+  // ── Approved transfers (recipient 0.0.8598115 — external wallet, not treasury) ──
   {
     label: "Small transfer — approved",
-    text: "Send 5 HBAR to 0.0.8570146",
+    text: "Send 5 HBAR to 0.0.8598115",
     tag: "APPROVED",
     tagClass: "bg-green-900 text-green-300",
   },
   {
     label: "Alternate phrasing — approved",
-    text: "Please transfer 10 HBAR to account 0.0.8570146 for the weekly payout",
+    text: "Please transfer 10 HBAR to account 0.0.8598115 for the weekly payout",
     tag: "APPROVED",
     tagClass: "bg-green-900 text-green-300",
   },
   // ── Approval required ─────────────────────────────────────────────────────
   {
     label: "High-value — approval required",
-    text: "Wire 150 HBAR to 0.0.8570146",
+    text: "Wire 150 HBAR to 0.0.8598115",
     tag: "APPROVAL REQ",
     tagClass: "bg-yellow-900 text-yellow-300",
   },
@@ -84,6 +84,12 @@ export default function Home() {
   const [replayLoading, setReplayLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Whitelist panel state
+  const [whitelist, setWhitelist] = useState<string[] | null>(null);
+  const [whitelistLoading, setWhitelistLoading] = useState(false);
+  const [newRecipient, setNewRecipient] = useState("");
+  const [whitelistError, setWhitelistError] = useState("");
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!instruction.trim()) return;
@@ -119,6 +125,43 @@ export default function Home() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setReplayLoading(false);
+    }
+  }
+
+  async function loadWhitelist(actor: string) {
+    setWhitelistLoading(true);
+    setWhitelistError("");
+    try {
+      const res = await fetch(`/api/whitelist?actorId=${encodeURIComponent(actor)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load whitelist");
+      setWhitelist(data.recipients ?? []);
+    } catch (err) {
+      setWhitelistError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWhitelistLoading(false);
+    }
+  }
+
+  async function handleAddRecipient(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newRecipient.trim()) return;
+    setWhitelistLoading(true);
+    setWhitelistError("");
+    try {
+      const res = await fetch("/api/whitelist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actorId, recipientId: newRecipient.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to add recipient");
+      setWhitelist(data.recipients ?? []);
+      setNewRecipient("");
+    } catch (err) {
+      setWhitelistError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWhitelistLoading(false);
     }
   }
 
@@ -189,6 +232,60 @@ export default function Home() {
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium"
           >
             {loading ? "Processing..." : "Submit"}
+          </button>
+        </form>
+      </section>
+
+      {/* Approved Recipient Whitelist */}
+      <section className="border border-gray-700 rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-200">Approved Recipients</span>
+          <span className="text-xs text-gray-600 font-mono">· actor: {actorId}</span>
+          <button
+            type="button"
+            onClick={() => loadWhitelist(actorId)}
+            disabled={whitelistLoading}
+            className="ml-auto text-xs px-2 py-0.5 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 disabled:opacity-50"
+          >
+            {whitelistLoading ? "Loading…" : whitelist === null ? "Load" : "Refresh"}
+          </button>
+        </div>
+
+        {whitelistError && (
+          <p className="text-xs text-red-400">{whitelistError}</p>
+        )}
+
+        {whitelist === null ? (
+          <p className="text-xs text-gray-600">
+            Click Load to see the approved recipient list for this actor.
+          </p>
+        ) : whitelist.length === 0 ? (
+          <p className="text-xs text-gray-500">No approved recipients configured.</p>
+        ) : (
+          <ul className="space-y-1">
+            {whitelist.map((r) => (
+              <li key={r} className="text-xs font-mono text-gray-300 bg-gray-900 rounded px-2 py-1">
+                {r}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Add new recipient */}
+        <form onSubmit={handleAddRecipient} className="flex gap-2">
+          <input
+            type="text"
+            value={newRecipient}
+            onChange={(e) => setNewRecipient(e.target.value)}
+            placeholder="0.0.xxxxxxx"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs font-mono text-gray-100 placeholder-gray-600"
+          />
+          <button
+            type="submit"
+            disabled={whitelistLoading || !newRecipient.trim()}
+            className="text-xs px-3 py-1.5 bg-teal-700 hover:bg-teal-600 disabled:opacity-50 rounded font-medium"
+          >
+            Add
           </button>
         </form>
       </section>
