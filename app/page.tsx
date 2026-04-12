@@ -501,7 +501,7 @@ export default function Home() {
         </div>
 
         {/* Per-submission audit summary — only shown after a run */}
-        {result && !result.parseResult?.clarificationMessage && (() => {
+        {result && (() => {
           const decision = result.policyResult?.decision;
           const auditWritten = !!result.hcsTopicId && result.hcsSequenceNumber >= 0;
           const outcomeClass =
@@ -543,17 +543,12 @@ export default function Home() {
               )}
 
               <span className="text-gray-500">Outcome</span>
-              <span className={outcomeClass}>{decision ?? "—"}</span>
+              <span className={outcomeClass}>
+                {result.stage === "PARSE_BLOCKED" ? "PARSE_BLOCKED" : (decision ?? "—")}
+              </span>
             </div>
           );
         })()}
-
-        {/* PARSE_BLOCKED path — no audit event written */}
-        {result?.parseResult?.clarificationMessage && (
-          <p className="text-xs font-mono text-gray-600">
-            No audit event written — instruction did not reach the pipeline.
-          </p>
-        )}
 
         {/* On-chain replay history */}
         <details className="group" open={auditLog.length > 0}>
