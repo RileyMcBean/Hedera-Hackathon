@@ -387,140 +387,133 @@ export default function Home() {
       })()}
 
       {/* ── Stage 3: Clearing Agent (Policy) + Execution ─────────────────────── */}
-      {result && !result.parseResult?.clarificationMessage && (
-        <section className="space-y-3 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-mono select-none">STAGE 3</span>
-            <h2 className="text-sm font-bold text-gray-200">Clearing Agent &amp; Execution</h2>
-          </div>
-          {badge && (
-            <span className={`inline-block px-3 py-1 rounded text-sm font-bold ${badge.className}`}>
-              {badge.label}
-            </span>
-          )}
-          {result.policyResult?.denialReason && (
-            <p className="text-sm text-gray-400">
-              <span className="text-gray-300">Reason:</span>{" "}
-              {result.policyResult.denialReason}
-            </p>
-          )}
-          {result.policyResult?.denialDetail && (
-            <p className="text-sm text-gray-500">{result.policyResult.denialDetail}</p>
-          )}
-          {result.balanceHbar !== null && result.balanceHbar !== undefined && (
-            <p className="text-sm">
-              <span className="text-gray-400">Balance: </span>
-              <span className="text-green-300 font-mono font-semibold">
-                {result.balanceHbar} HBAR
-              </span>
-            </p>
-          )}
-          {result.txId && (
-            <p className="text-sm">
-              <span className="text-gray-400">Tx ID: </span>
-              <a
-                href={`${hashscanBase}/${result.txId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline break-all"
-              >
-                {result.txId}
-              </a>
-            </p>
-          )}
-          {(() => {
-            const rules = result.policyResult?.evaluatedRules ?? [];
-            return rules.length > 0 ? (
+      {result && (() => {
+        const isBlocked = result.stage === "PARSE_BLOCKED";
+        const decision = result.policyResult?.decision;
+        const pr = result.policyResult;
+
+        // Execution status label and colour
+        type ExecStatus = "executed" | "not executed" | "not reached";
+        let execStatus: ExecStatus;
+        let execClass: string;
+        if (isBlocked) {
+          execStatus = "not reached";
+          execClass = "text-gray-600";
+        } else if (result.txId || result.balanceHbar !== null) {
+          execStatus = "executed";
+          execClass = "text-green-400";
+        } else {
+          execStatus = "not executed";
+          execClass = "text-gray-500";
+        }
+
+        const rules = pr?.evaluatedRules ?? [];
+
+        return (
+          <section className="border border-gray-700 rounded-lg p-4 space-y-3">
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-mono select-none">STAGE 3</span>
+              <span className="text-sm font-bold text-gray-200">Clearing Agent &amp; Execution</span>
+              {badge && !isBlocked && (
+                <span className={`ml-auto text-xs px-2 py-0.5 rounded font-mono font-bold ${badge.className}`}>
+                  {badge.label}
+                </span>
+              )}
+              {isBlocked && (
+                <span className="ml-auto text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500 font-mono">
+                  NOT REACHED
+                </span>
+              )}
+            </div>
+
+            {/* Evidence grid */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs font-mono">
+
+              {/* Policy decision row */}
+              <span className="text-gray-500">Decision</span>
+              {isBlocked ? (
+                <span className="text-gray-600">skipped — parse blocked</span>
+              ) : (
+                <span className={
+                  decision === "APPROVED"          ? "text-green-400"  :
+                  decision === "DENIED"            ? "text-red-400"    :
+                  decision === "APPROVAL_REQUIRED" ? "text-yellow-400" :
+                  decision === "MANUAL_REVIEW"     ? "text-orange-400" :
+                                                     "text-gray-400"
+                }>
+                  {decision ?? "—"}
+                </span>
+              )}
+
+              {/* Denial reason — structured code */}
+              {!isBlocked && pr?.denialReason && (
+                <>
+                  <span className="text-gray-500">Reason</span>
+                  <span className="text-red-300">{pr.denialReason}</span>
+                </>
+              )}
+
+              {/* Denial detail — human explanation */}
+              {!isBlocked && pr?.denialDetail && (
+                <>
+                  <span className="text-gray-500">Detail</span>
+                  <span className="text-gray-400 whitespace-normal">{pr.denialDetail}</span>
+                </>
+              )}
+
+              {/* Parse-blocked reason */}
+              {isBlocked && result.error && (
+                <>
+                  <span className="text-gray-500">Reason</span>
+                  <span className="text-amber-400 whitespace-normal">{result.error}</span>
+                </>
+              )}
+
+              {/* Execution status */}
+              <span className="text-gray-500">Execution</span>
+              <span className={execClass}>{execStatus}</span>
+
+              {/* Approved transfer — tx link */}
+              {result.txId && (
+                <>
+                  <span className="text-gray-500">Tx</span>
+                  <a
+                    href={`${hashscanBase}/${result.txId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline break-all"
+                  >
+                    {result.txId}
+                  </a>
+                </>
+              )}
+
+              {/* Balance check result */}
+              {result.balanceHbar !== null && result.balanceHbar !== undefined && (
+                <>
+                  <span className="text-gray-500">Balance</span>
+                  <span className="text-green-300 font-semibold">{result.balanceHbar} HBAR</span>
+                </>
+              )}
+            </div>
+
+            {/* Evaluated rules — collapsible, only when rules were actually run */}
+            {rules.length > 0 && (
               <details className="text-xs text-gray-500">
-                <summary className="cursor-pointer hover:text-gray-400">
+                <summary className="cursor-pointer hover:text-gray-400 select-none">
                   Rules evaluated ({rules.length})
                 </summary>
-                <ul className="mt-1 ml-4 list-disc">
+                <ul className="mt-1 ml-4 space-y-0.5 list-disc">
                   {rules.map((r) => (
                     <li key={r}>{r}</li>
                   ))}
                 </ul>
               </details>
-            ) : null;
-          })()}
-
-          {/* ── DEBUG ── remove before demo ── */}
-          <details className="mt-3 border border-yellow-800 rounded p-2 text-xs">
-            <summary className="cursor-pointer text-yellow-500 font-bold">
-              [DEBUG] Pipeline trace
-            </summary>
-            <div className="mt-2 space-y-2 text-gray-400">
-              <div>
-                <span className="text-yellow-600 font-semibold">Raw instruction</span>
-                <pre className="mt-0.5 whitespace-pre-wrap break-all text-gray-300">
-                  {result.action.rawInstruction}
-                </pre>
-              </div>
-              <div>
-                <span className="text-yellow-600 font-semibold">Parsed action</span>
-                <pre className="mt-0.5 whitespace-pre-wrap break-all text-gray-300">
-                  {JSON.stringify(
-                    {
-                      actionType: result.action.actionType,
-                      actorId: result.action.actorId,
-                      recipientId: result.action.recipientId,
-                      amountHbar: result.action.amountHbar,
-                      correlationId: result.action.correlationId,
-                    },
-                    null,
-                    2
-                  )}
-                </pre>
-              </div>
-              <div>
-                <span className="text-yellow-600 font-semibold">Policy decision</span>
-                <pre className="mt-0.5 text-gray-300">
-                  {result.policyResult?.decision ?? "null"} (stage: {result.stage})
-                </pre>
-              </div>
-              {result.parseResult && (
-                <div>
-                  <span className="text-yellow-600 font-semibold">Parse gate</span>
-                  <pre className="mt-0.5 text-gray-300">
-                    {JSON.stringify(
-                      {
-                        shouldProceed: result.parseResult.shouldProceed,
-                        parseWarnings: result.parseResult.parseWarnings,
-                        clarificationMessage: result.parseResult.clarificationMessage,
-                      },
-                      null,
-                      2
-                    )}
-                  </pre>
-                </div>
-              )}
-              <div>
-                <span className="text-yellow-600 font-semibold">Reason / rules</span>
-                <pre className="mt-0.5 whitespace-pre-wrap break-all text-gray-300">
-                  {JSON.stringify(
-                    {
-                      denialReason: result.policyResult?.denialReason ?? null,
-                      denialDetail: result.policyResult?.denialDetail ?? "",
-                      evaluatedRules: result.policyResult?.evaluatedRules ?? [],
-                    },
-                    null,
-                    2
-                  )}
-                </pre>
-              </div>
-              {result.error && (
-                <div>
-                  <span className="text-red-500 font-semibold">Error</span>
-                  <pre className="mt-0.5 whitespace-pre-wrap break-all text-red-400">
-                    {result.error}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </details>
-          {/* ── END DEBUG ── */}
-        </section>
-      )}
+            )}
+          </section>
+        );
+      })()}
 
       {/* ── Stage 4: Evidence Layer ───────────────────────────────────────────── */}
       <section className="border border-violet-900 rounded-lg p-4 space-y-3">
