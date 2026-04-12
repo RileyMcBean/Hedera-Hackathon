@@ -9,12 +9,48 @@ const DEMO_ACTORS = [
   { id: "0.0.8570111", label: "0.0.8570111 — OPERATOR (100 HBAR limit)" },
 ];
 
-const DEMO_INSTRUCTIONS = [
-  "Send 5 HBAR to 0.0.8570146",
-  "Transfer 10 HBAR to 0.0.8570146",
-  "Pay 200 HBAR to 0.0.8570146",
-  "Send 5 HBAR to 0.0.9999999",
-  "Check my balance",
+const DEMO_INSTRUCTIONS: { label: string; text: string; tag: string; tagClass: string }[] = [
+  // ── Approved transfers ────────────────────────────────────────────────────
+  {
+    label: "Small transfer — approved",
+    text: "Send 5 HBAR to 0.0.8570146",
+    tag: "APPROVED",
+    tagClass: "bg-green-900 text-green-300",
+  },
+  {
+    label: "Alternate phrasing — approved",
+    text: "Please transfer 10 HBAR to account 0.0.8570146 for the weekly payout",
+    tag: "APPROVED",
+    tagClass: "bg-green-900 text-green-300",
+  },
+  // ── Approval required ─────────────────────────────────────────────────────
+  {
+    label: "High-value — approval required",
+    text: "Wire 150 HBAR to 0.0.8570146",
+    tag: "APPROVAL REQ",
+    tagClass: "bg-yellow-900 text-yellow-300",
+  },
+  // ── Denied ───────────────────────────────────────────────────────────────
+  {
+    label: "Unapproved recipient — denied",
+    text: "Send 5 HBAR to 0.0.9999999",
+    tag: "DENIED",
+    tagClass: "bg-red-900 text-red-300",
+  },
+  // ── Balance check ─────────────────────────────────────────────────────────
+  {
+    label: "Balance check",
+    text: "What is the current balance on this account?",
+    tag: "BALANCE",
+    tagClass: "bg-indigo-900 text-indigo-300",
+  },
+  // ── Ambiguous — triggers clarification ───────────────────────────────────
+  {
+    label: "Vague — clarification needed",
+    text: "Send money",
+    tag: "BLOCKED",
+    tagClass: "bg-amber-900 text-amber-300",
+  },
 ];
 
 type DecisionBadge = {
@@ -128,15 +164,21 @@ export default function Home() {
               className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 placeholder-gray-500 resize-none"
             />
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-col gap-1.5">
             {DEMO_INSTRUCTIONS.map((instr) => (
               <button
-                key={instr}
+                key={instr.text}
                 type="button"
-                onClick={() => setInstruction(instr)}
-                className="text-xs px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-gray-300"
+                onClick={() => setInstruction(instr.text)}
+                className="flex items-center gap-2 text-left px-2 py-1.5 bg-gray-800 border border-gray-700 rounded hover:bg-gray-750 hover:border-gray-600 text-gray-300 group"
               >
-                {instr}
+                <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-mono font-bold ${instr.tagClass}`}>
+                  {instr.tag}
+                </span>
+                <span className="text-xs text-gray-400 group-hover:text-gray-200">{instr.label}</span>
+                <span className="ml-auto text-xs text-gray-600 font-mono truncate max-w-xs hidden sm:block">
+                  {instr.text}
+                </span>
               </button>
             ))}
           </div>
