@@ -105,6 +105,7 @@ function createScheduleDryRun(action: Action): ScheduleResult {
 export interface ApprovalResult {
   readonly scheduleId: string;
   readonly signTxId: string;
+  readonly executionTxId: string; // ID of the actual transfer execution (separate transaction)
   readonly status: "SCHEDULE_APPROVED" | "ALREADY_EXECUTED" | "APPROVAL_SUBMITTED";
   readonly network: string;
 }
@@ -156,10 +157,15 @@ async function approveScheduleSdk(scheduleId: string): Promise<ApprovalResult> {
 
     const status = receipt.status.toString();
     const signTxId = response.transactionId.toString();
+    // scheduledTransactionId is the ID of the actual transfer that Hedera
+    // triggered automatically once all required signatures were collected.
+    // This is a SEPARATE transaction from the ScheduleSign itself.
+    const executionTxId = receipt.scheduledTransactionId?.toString() ?? "";
 
     return {
       scheduleId,
       signTxId,
+      executionTxId,
       status: status === "SUCCESS" ? "SCHEDULE_APPROVED" : "APPROVAL_SUBMITTED",
       network: cfg.network,
     };
@@ -174,6 +180,7 @@ function approveScheduleDryRun(scheduleId: string): ApprovalResult {
   return {
     scheduleId,
     signTxId: `DRY-SIGN-${scheduleId}@0.000000000`,
+    executionTxId: `DRY-EXEC-${scheduleId}@0.000000000`,
     status: "SCHEDULE_APPROVED",
     network: "dry_run",
   };

@@ -123,6 +123,7 @@ export default function Home() {
   const [approvalResult, setApprovalResult] = useState<{
     status: string;
     signTxId: string;
+    executionTxId: string;
     scheduleId: string;
     hcsTopicId?: string;
     hcsSequenceNumber?: number;
@@ -698,6 +699,20 @@ export default function Home() {
                       >
                         {approvalResult.signTxId}
                       </a>
+
+                      {approvalResult.executionTxId && (
+                        <>
+                          <span className="text-gray-500">Transfer Tx</span>
+                          <a
+                            href={`${hashscanBase}/${approvalResult.executionTxId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-400 hover:underline break-all"
+                          >
+                            {approvalResult.executionTxId}
+                          </a>
+                        </>
+                      )}
                     </>
                   )}
                 </>
@@ -842,6 +857,20 @@ export default function Home() {
                 <>
                   <span className="text-gray-500">Approval</span>
                   <span className="text-green-400">{approvalResult.status}</span>
+
+                  {approvalResult.executionTxId && (
+                    <>
+                      <span className="text-gray-500">Transfer Tx</span>
+                      <a
+                        href={`${hashscanBase}/${approvalResult.executionTxId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-400 hover:underline break-all"
+                      >
+                        {approvalResult.executionTxId}
+                      </a>
+                    </>
+                  )}
 
                   <span className="text-gray-500">Sign Tx</span>
                   <a
