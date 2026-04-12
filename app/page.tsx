@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { PipelineResult } from "../src/runtime/pipeline";
 import type { ParseResult } from "../src/agents/intentParser";
 import type { AuditMessage } from "../src/schemas/audit";
+import type { ContextSnapshot } from "../src/context/loader";
 
 const DEMO_ACTORS = [
   { id: "0.0.8570111", label: "0.0.8570111 — OPERATOR (100 HBAR limit)" },
@@ -299,12 +300,68 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Stage 2: Policy + Execution ──────────────────────────────────────── */}
+      {/* ── Stage 2: Context Engine ───────────────────────────────────────────── */}
+      {result?.context && !result.parseResult?.clarificationMessage && (() => {
+        const ctx = result.context as ContextSnapshot;
+        const recipientId = result.action.recipientId;
+        const recipientApproved =
+          !ctx.enforceRecipientAllowlist ||
+          (!!recipientId && ctx.approvedRecipients.includes(recipientId));
+
+        const treasuryClass =
+          ctx.treasuryPosture === "NORMAL"
+            ? "text-green-400"
+            : ctx.treasuryPosture === "RESTRICTED"
+            ? "text-yellow-400"
+            : "text-red-400";
+
+        return (
+          <section className="border border-teal-900 rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-mono select-none">STAGE 2</span>
+              <span className="text-sm font-bold text-teal-300">Context Engine</span>
+              <span className="ml-auto text-xs px-2 py-0.5 rounded bg-teal-950 text-teal-400 font-mono">LOADED</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs font-mono">
+              <span className="text-gray-500">Actor</span>
+              <span className="text-gray-200">{ctx.actorId}</span>
+
+              <span className="text-gray-500">Role</span>
+              <span className="text-gray-200">{ctx.actorRole}</span>
+
+              <span className="text-gray-500">Transfer limit</span>
+              <span className="text-gray-200">{ctx.amountThresholdHbar} HBAR</span>
+
+              <span className="text-gray-500">Treasury</span>
+              <span className={treasuryClass}>{ctx.treasuryPosture}</span>
+
+              {result.action.actionType === "HBAR_TRANSFER" && (
+                <>
+                  <span className="text-gray-500">Recipient</span>
+                  <span className="text-gray-200">{recipientId || "—"}</span>
+
+                  <span className="text-gray-500">Allowlist</span>
+                  <span className={recipientApproved ? "text-green-400" : "text-red-400"}>
+                    {ctx.enforceRecipientAllowlist
+                      ? recipientApproved
+                        ? "approved"
+                        : "not on list"
+                      : "not enforced"}
+                  </span>
+                </>
+              )}
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* ── Stage 3: Clearing Agent (Policy) + Execution ─────────────────────── */}
       {result && !result.parseResult?.clarificationMessage && (
         <section className="space-y-3 border border-gray-800 rounded-lg p-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-mono select-none">STAGE 2</span>
-            <h2 className="text-sm font-bold text-gray-200">Policy Engine &amp; Execution</h2>
+            <span className="text-xs text-gray-500 font-mono select-none">STAGE 3</span>
+            <h2 className="text-sm font-bold text-gray-200">Clearing Agent &amp; Execution</h2>
           </div>
           {badge && (
             <span className={`inline-block px-3 py-1 rounded text-sm font-bold ${badge.className}`}>
