@@ -8,6 +8,7 @@
 import type { AuditMessage } from "../schemas/audit";
 import { AuditMessageSchema } from "../schemas/audit";
 import { hederaConfigFromEnv } from "./config";
+import { computePayloadHash, verifyPayloadHash } from "../audit/integrity";
 
 const MIRROR_NODE_URL =
   process.env.MIRROR_NODE_URL ?? "https://testnet.mirrornode.hedera.com";
@@ -45,7 +46,14 @@ export async function submitMessage(msg: AuditMessage): Promise<AuditMessage> {
     PrivateKey.fromStringECDSA(config.operatorKey.replace(/^0x/i, ''))
   );
 
-  const payload = JSON.stringify(msg);
+  // Compute integrity hash over the canonical payload (excluding payloadHash
+  // itself) and attach it before serialization.
+  const msgWithHash: AuditMessage = {
+    ...msg,
+    payloadHash: computePayloadHash(msg),
+  };
+
+  const payload = JSON.stringify(msgWithHash);
 
   const txResponse = await new TopicMessageSubmitTransaction()
     .setTopicId(TopicId.fromString(topicId))
@@ -56,7 +64,7 @@ export async function submitMessage(msg: AuditMessage): Promise<AuditMessage> {
   const sequenceNumber = Number(receipt.topicSequenceNumber);
 
   return {
-    ...msg,
+    ...msgWithHash,
     topicId,
     sequenceNumber,
   };
@@ -93,15 +101,17 @@ export async function fetchMessages(
 
   const data = (await response.json()) as MirrorNodeResponse;
 
-  const messages: AuditMessage[] = [];
+  const messages: (AuditMessage & { hashVerified?: boolean })[] = [];
   for (const item of data.messages ?? []) {
     try {
       const decoded = Buffer.from(item.message, "base64").toString("utf-8");
       const parsed = AuditMessageSchema.parse(JSON.parse(decoded));
+      const verified = verifyPayloadHash(parsed);
       messages.push({
         ...parsed,
         topicId: item.topic_id,
         sequenceNumber: item.sequence_number,
+        hashVerified: parsed.payloadHash ? verified : undefined,
       });
     } catch {
       // Skip malformed messages

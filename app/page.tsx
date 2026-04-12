@@ -920,7 +920,7 @@ export default function Home() {
               </p>
             ) : auditLog.length === 0 ? (
               <p className="text-xs text-gray-600">No audit events found yet on this topic.</p>
-            ) : auditLog.map((msg) => {
+            ) : auditLog.map((msg: AuditMessage & { hashVerified?: boolean }) => {
               const ac = msg.agentContext;
               // A PARSE_BLOCKED event has: decision=DENIED, denialReason=null,
               // evaluatedRules=[], and agentContext present with low confidence.
@@ -962,6 +962,18 @@ export default function Home() {
                           ac.confidence >= 0.5 ? "text-yellow-600" :
                                                  "text-red-600"
                         }>{Math.round(ac.confidence * 100)}%</span>
+                      </>
+                    )}
+                    {msg.hashVerified !== undefined && (
+                      <>
+                        <span className="text-gray-700">·</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                          msg.hashVerified
+                            ? "bg-green-950 text-green-400"
+                            : "bg-red-950 text-red-400"
+                        }`}>
+                          {msg.hashVerified ? "integrity: verified" : "integrity: mismatch"}
+                        </span>
                       </>
                     )}
                   </div>

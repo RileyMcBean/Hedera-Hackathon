@@ -33,6 +33,11 @@ export const AuditMessageSchema = z.object({
   sequenceNumber: z.number().int().default(-1), // HCS sequence number (populated after submission)
   /** Intent Parser Agent context — present when the action originated from a parsed instruction. */
   agentContext: AgentContextSchema.optional(),
+  /**
+   * SHA-256 hash of the canonical audit payload (all fields EXCEPT payloadHash
+   * itself). Used by replay to verify the fetched payload hasn't been altered.
+   */
+  payloadHash: z.string().default(""),
 });
 
 export type AuditMessage = z.infer<typeof AuditMessageSchema>;
