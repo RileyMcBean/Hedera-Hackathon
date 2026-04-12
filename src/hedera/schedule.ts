@@ -100,6 +100,85 @@ function createScheduleDryRun(action: Action): ScheduleResult {
   };
 }
 
+// ── Approval result ──────────────────────────────────────────────────────────
+
+export interface ApprovalResult {
+  readonly scheduleId: string;
+  readonly signTxId: string;
+  readonly status: "SCHEDULE_APPROVED" | "ALREADY_EXECUTED" | "APPROVAL_SUBMITTED";
+  readonly network: string;
+}
+
+// ── Approve (SDK) ────────────────────────────────────────────────────────────
+
+async function approveScheduleSdk(scheduleId: string): Promise<ApprovalResult> {
+  const sdk = await import("@hashgraph/sdk");
+  const {
+    Client,
+    AccountId,
+    PrivateKey,
+    ScheduleSignTransaction,
+    ScheduleId,
+  } = sdk;
+
+  const cfg = hederaConfigFromEnv();
+
+  // The secondary approver can be a separate key pair (HEDERA_APPROVER_*),
+  // or fall back to the treasury key — which is the key that needs to sign
+  // the inner TransferTransaction for it to execute.
+  const approverId = AccountId.fromString(
+    process.env.HEDERA_APPROVER_ID || cfg.treasuryId
+  );
+  const approverKey = PrivateKey.fromStringECDSA(
+    (process.env.HEDERA_APPROVER_KEY || cfg.treasuryKey).replace(/^0x/i, "")
+  );
+
+  // Operator pays the ScheduleSign fee
+  const operatorId = AccountId.fromString(cfg.operatorId);
+  const operatorKey = PrivateKey.fromStringECDSA(
+    cfg.operatorKey.replace(/^0x/i, "")
+  );
+
+  const client =
+    cfg.network === "testnet" ? Client.forTestnet() : Client.forMainnet();
+  client.setOperator(operatorId, operatorKey);
+
+  try {
+    const signTx = new ScheduleSignTransaction()
+      .setScheduleId(ScheduleId.fromString(scheduleId))
+      .freezeWith(client);
+
+    // Sign with the approver key (treasury key by default — this is the
+    // missing signature that the inner TransferTransaction needs)
+    const signedTx = await signTx.sign(approverKey);
+    const response = await signedTx.execute(client);
+    const receipt = await response.getReceipt(client);
+
+    const status = receipt.status.toString();
+    const signTxId = response.transactionId.toString();
+
+    return {
+      scheduleId,
+      signTxId,
+      status: status === "SUCCESS" ? "SCHEDULE_APPROVED" : "APPROVAL_SUBMITTED",
+      network: cfg.network,
+    };
+  } finally {
+    client.close();
+  }
+}
+
+// ── Approve (dry run) ────────────────────────────────────────────────────────
+
+function approveScheduleDryRun(scheduleId: string): ApprovalResult {
+  return {
+    scheduleId,
+    signTxId: `DRY-SIGN-${scheduleId}@0.000000000`,
+    status: "SCHEDULE_APPROVED",
+    network: "dry_run",
+  };
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -112,4 +191,16 @@ export async function createScheduledTransfer(
   const backend = (process.env.TRANSFER_BACKEND ?? "sdk").toLowerCase();
   if (backend === "dry_run") return createScheduleDryRun(action);
   return createScheduleSdk(action);
+}
+
+/**
+ * Submit a secondary signature to approve a pending scheduled transaction.
+ * Uses HEDERA_APPROVER_ID/KEY if set, otherwise falls back to treasury credentials.
+ */
+export async function approveScheduledTransfer(
+  scheduleId: string
+): Promise<ApprovalResult> {
+  const backend = (process.env.TRANSFER_BACKEND ?? "sdk").toLowerCase();
+  if (backend === "dry_run") return approveScheduleDryRun(scheduleId);
+  return approveScheduleSdk(scheduleId);
 }
