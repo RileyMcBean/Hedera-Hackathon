@@ -10,49 +10,82 @@ const DEMO_ACTORS = [
   { id: "0.0.8570111", label: "0.0.8570111 — OPERATOR (100 HBAR limit)" },
 ];
 
-const DEMO_INSTRUCTIONS: { label: string; text: string; tag: string; tagClass: string }[] = [
-  // ── Approved transfers (recipient 0.0.8598115 — external wallet, not treasury) ──
-  {
-    label: "Small transfer — approved",
-    text: "Send 5 HBAR to 0.0.8598115",
-    tag: "APPROVED",
-    tagClass: "bg-green-900 text-green-300",
+type Instruction = { label: string; text: string; tag: string; tagClass: string };
+
+type ScenarioKey =
+  | "remittance"
+  | "ngo"
+  | "sme"
+  | "sikahub";
+
+interface Scenario {
+  label: string;
+  description: string;
+  actorLabel: string;
+  partnerLabel: string;
+  instructions: Instruction[];
+}
+
+const APPROVED = { tag: "APPROVED",     tagClass: "bg-green-900 text-green-300"  };
+const APPROVAL = { tag: "APPROVAL REQ", tagClass: "bg-yellow-900 text-yellow-300" };
+const DENIED   = { tag: "DENIED",       tagClass: "bg-red-900 text-red-300"       };
+const BALANCE  = { tag: "BALANCE",      tagClass: "bg-indigo-900 text-indigo-300" };
+const BLOCKED  = { tag: "BLOCKED",      tagClass: "bg-amber-900 text-amber-300"   };
+
+const SCENARIOS: Record<ScenarioKey, Scenario> = {
+  remittance: {
+    label: "Remittance operator payout",
+    description: "Governed payout from a remittance operator to an approved corridor partner.",
+    actorLabel: "Remittance Operator",
+    partnerLabel: "Corridor Partner",
+    instructions: [
+      { label: "Small payout — approved",          text: "Send 5 HBAR to 0.0.8598115",   ...APPROVED },
+      { label: "Unapproved wallet — denied",        text: "Send 5 HBAR to 0.0.9999999",   ...DENIED   },
+      { label: "High-value — approval required",    text: "Send 200 HBAR to 0.0.8598115", ...APPROVAL },
+      { label: "Balance check",                     text: "Check treasury balance",        ...BALANCE  },
+      { label: "Vague — clarification needed",      text: "Send money to partner",         ...BLOCKED  },
+    ],
   },
-  {
-    label: "Alternate phrasing — approved",
-    text: "Please transfer 10 HBAR to account 0.0.8598115 for the weekly payout",
-    tag: "APPROVED",
-    tagClass: "bg-green-900 text-green-300",
+  ngo: {
+    label: "NGO / aid disbursement",
+    description: "Controlled disbursement to an approved field partner with full audit evidence.",
+    actorLabel: "NGO Treasury",
+    partnerLabel: "Field Partner",
+    instructions: [
+      { label: "Small disbursement — approved",     text: "Release 5 HBAR to 0.0.8598115",   ...APPROVED },
+      { label: "Unknown wallet — denied",           text: "Release 5 HBAR to 0.0.9999999",   ...DENIED   },
+      { label: "Large disbursement — approval req", text: "Release 200 HBAR to 0.0.8598115", ...APPROVAL },
+      { label: "Balance check",                     text: "Check disbursement wallet balance", ...BALANCE },
+      { label: "Vague — clarification needed",      text: "Send funds urgently",               ...BLOCKED },
+    ],
   },
-  // ── Approval required ─────────────────────────────────────────────────────
-  {
-    label: "High-value — approval required",
-    text: "Wire 150 HBAR to 0.0.8598115",
-    tag: "APPROVAL REQ",
-    tagClass: "bg-yellow-900 text-yellow-300",
+  sme: {
+    label: "SME treasury payment",
+    description: "Governed treasury payment to an approved vendor or supplier.",
+    actorLabel: "SME Treasury",
+    partnerLabel: "Vendor / Supplier",
+    instructions: [
+      { label: "Vendor payment — approved",         text: "Pay 5 HBAR to 0.0.8598115",   ...APPROVED },
+      { label: "Unapproved vendor — denied",        text: "Pay 5 HBAR to 0.0.9999999",   ...DENIED   },
+      { label: "Large payment — approval required", text: "Pay 200 HBAR to 0.0.8598115", ...APPROVAL },
+      { label: "Balance check",                     text: "Check treasury balance",       ...BALANCE  },
+      { label: "Vague — clarification needed",      text: "Pay supplier",                 ...BLOCKED  },
+    ],
   },
-  // ── Denied ───────────────────────────────────────────────────────────────
-  {
-    label: "Unapproved recipient — denied",
-    text: "Send 5 HBAR to 0.0.9999999",
-    tag: "DENIED",
-    tagClass: "bg-red-900 text-red-300",
+  sikahub: {
+    label: "SikaHub partner corridor",
+    description: "Governed payout in a SikaHub-style Ghana / diaspora partner payment flow.",
+    actorLabel: "SikaHub Operator",
+    partnerLabel: "Corridor Wallet",
+    instructions: [
+      { label: "Corridor payout — approved",        text: "Send 5 HBAR to 0.0.8598115",   ...APPROVED },
+      { label: "Unapproved corridor — denied",      text: "Send 5 HBAR to 0.0.9999999",   ...DENIED   },
+      { label: "High-value — approval required",    text: "Send 200 HBAR to 0.0.8598115", ...APPROVAL },
+      { label: "Balance check",                     text: "Check corridor treasury balance", ...BALANCE },
+      { label: "Vague — clarification needed",      text: "Send payout now",               ...BLOCKED  },
+    ],
   },
-  // ── Balance check ─────────────────────────────────────────────────────────
-  {
-    label: "Balance check",
-    text: "What is the current balance on this account?",
-    tag: "BALANCE",
-    tagClass: "bg-indigo-900 text-indigo-300",
-  },
-  // ── Ambiguous — triggers clarification ───────────────────────────────────
-  {
-    label: "Vague — clarification needed",
-    text: "Send money",
-    tag: "BLOCKED",
-    tagClass: "bg-amber-900 text-amber-300",
-  },
-];
+};
 
 type DecisionBadge = {
   label: string;
@@ -75,6 +108,7 @@ function getBadge(decision?: string): DecisionBadge {
 }
 
 export default function Home() {
+  const [scenario, setScenario] = useState<ScenarioKey>("remittance");
   const [instruction, setInstruction] = useState("");
   const [actorId, setActorId] = useState(DEMO_ACTORS[0].id);
   const [result, setResult] = useState<(PipelineResult & { parseResult?: ParseResult }) | null>(null);
@@ -182,19 +216,28 @@ export default function Home() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-200">Submit Instruction</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Workflow Scenario selector */}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Actor</label>
+            <label className="block text-sm text-gray-400 mb-1">Workflow Scenario</label>
             <select
-              value={actorId}
-              onChange={(e) => setActorId(e.target.value)}
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value as ScenarioKey)}
               className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100"
             >
-              {DEMO_ACTORS.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
+              {(Object.entries(SCENARIOS) as [ScenarioKey, Scenario][]).map(([key, s]) => (
+                <option key={key} value={key}>{s.label}</option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-gray-500">{SCENARIOS[scenario].description}</p>
+          </div>
+
+          {/* Acting principal — read-only, derived from scenario */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Acting principal</label>
+            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+              <span className="text-gray-100">{SCENARIOS[scenario].actorLabel}</span>
+              <span className="text-gray-600 font-mono text-xs ml-auto">{actorId}</span>
+            </div>
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">
@@ -209,7 +252,7 @@ export default function Home() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            {DEMO_INSTRUCTIONS.map((instr) => (
+            {SCENARIOS[scenario].instructions.map((instr) => (
               <button
                 key={instr.text}
                 type="button"
@@ -490,12 +533,16 @@ export default function Home() {
         const pr = result.policyResult;
 
         // Execution status label and colour
-        type ExecStatus = "executed" | "not executed" | "not reached";
+        const isScheduled = !!result.scheduleId;
+        type ExecStatus = "executed" | "pending approval" | "not executed" | "not reached";
         let execStatus: ExecStatus;
         let execClass: string;
         if (isBlocked) {
           execStatus = "not reached";
           execClass = "text-gray-600";
+        } else if (isScheduled) {
+          execStatus = "pending approval";
+          execClass = "text-yellow-400";
         } else if (result.txId || result.balanceHbar !== null) {
           execStatus = "executed";
           execClass = "text-green-400";
@@ -586,6 +633,24 @@ export default function Home() {
                 </>
               )}
 
+              {/* Scheduled transaction — pending approval */}
+              {result.scheduleId && (
+                <>
+                  <span className="text-gray-500">Schedule ID</span>
+                  <a
+                    href={`https://hashscan.io/testnet/schedule/${result.scheduleId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-yellow-400 hover:underline break-all"
+                  >
+                    {result.scheduleId}
+                  </a>
+
+                  <span className="text-gray-500">Next step</span>
+                  <span className="text-yellow-300 whitespace-normal">Awaiting secondary signature via ScheduleSignTransaction</span>
+                </>
+              )}
+
               {/* Balance check result */}
               {result.balanceHbar !== null && (
                 <>
@@ -673,6 +738,20 @@ export default function Home() {
                     className="text-blue-400 hover:underline break-all"
                   >
                     {result.txId}
+                  </a>
+                </>
+              )}
+
+              {result.scheduleId && (
+                <>
+                  <span className="text-gray-500">Schedule</span>
+                  <a
+                    href={`https://hashscan.io/testnet/schedule/${result.scheduleId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-yellow-400 hover:underline break-all"
+                  >
+                    {result.scheduleId}
                   </a>
                 </>
               )}
@@ -798,6 +877,20 @@ export default function Home() {
                           className="text-blue-400 hover:underline break-all"
                         >
                           {msg.txId}
+                        </a>
+                      </>
+                    )}
+
+                    {msg.scheduleId && (
+                      <>
+                        <span className="text-gray-600">Schedule</span>
+                        <a
+                          href={`https://hashscan.io/testnet/schedule/${msg.scheduleId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-yellow-400 hover:underline break-all"
+                        >
+                          {msg.scheduleId}
                         </a>
                       </>
                     )}

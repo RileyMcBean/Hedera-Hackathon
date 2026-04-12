@@ -21,7 +21,8 @@ export async function record(
   action: Action,
   policyResult: PolicyResult,
   txId = "",
-  agentContext?: AgentContext
+  agentContext?: AgentContext,
+  scheduleId = ""
 ): Promise<AuditMessage> {
   const msg: AuditMessage = {
     correlationId: action.correlationId,
@@ -29,6 +30,7 @@ export async function record(
     action,
     policyResult,
     txId,
+    scheduleId,
     topicId: "",
     sequenceNumber: -1,
     ...(agentContext !== undefined ? { agentContext } : {}),

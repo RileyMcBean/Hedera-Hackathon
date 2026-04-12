@@ -13,6 +13,7 @@ import { loadContext } from "../context/loader";
 import { evaluatePolicy } from "../policy/engine";
 import { executeHbarTransfer } from "../hedera/transfer";
 import { queryBalance } from "../hedera/balance";
+import { createScheduledTransfer } from "../hedera/schedule";
 import { record as recordAudit } from "../audit/trail";
 
 // ── Pipeline stage ────────────────────────────────────────────────────────────
@@ -20,6 +21,7 @@ import { record as recordAudit } from "../audit/trail";
 export type PipelineStage =
   | "PARSE_BLOCKED"
   | "POLICY_EVALUATED"
+  | "SCHEDULED"
   | "EXECUTED"
   | "AUDITED"
   | "ERROR";
@@ -36,6 +38,7 @@ export interface PipelineResult {
   // Phase 2 — Hedera execution
   txId: string;
   balanceHbar: number | null;   // populated for CHECK_BALANCE actions
+  scheduleId: string;           // populated for APPROVAL_REQUIRED scheduled transfers
 
   // Phase 2 — HCS audit
   hcsTopicId: string;
@@ -80,6 +83,7 @@ export function runPolicyOnly(action: Action): PipelineResult {
       timestamp: now(),
       txId: "",
       balanceHbar: null,
+      scheduleId: "",
       hcsTopicId: "",
       hcsSequenceNumber: -1,
       error: String(err),
@@ -96,6 +100,7 @@ export function runPolicyOnly(action: Action): PipelineResult {
     timestamp: now(),
     txId: "",
     balanceHbar: null,
+    scheduleId: "",
     hcsTopicId: "",
     hcsSequenceNumber: -1,
     error: "",
@@ -120,9 +125,12 @@ export async function run(action: Action, agentContext?: AgentContext): Promise<
 
   let txId = "";
   let balanceHbar: number | null = null;
+  let scheduleId = "";
   let stage: PipelineStage = "POLICY_EVALUATED";
 
-  if (policyResult!.decision === "APPROVED") {
+  const decision = policyResult!.decision;
+
+  if (decision === "APPROVED") {
     if (action.actionType === "HBAR_TRANSFER") {
       // Execute transfer
       try {
@@ -133,6 +141,7 @@ export async function run(action: Action, agentContext?: AgentContext): Promise<
         return {
           ...phase1,
           balanceHbar: null,
+          scheduleId: "",
           stage: "ERROR",
           error: `Transfer failed: ${err}`,
         };
@@ -147,21 +156,33 @@ export async function run(action: Action, agentContext?: AgentContext): Promise<
         return {
           ...phase1,
           balanceHbar: null,
+          scheduleId: "",
           stage: "ERROR",
           error: `Balance query failed: ${err}`,
         };
       }
     }
+  } else if (decision === "APPROVAL_REQUIRED" && action.actionType === "HBAR_TRANSFER") {
+    // Create a scheduled transaction — funds are NOT released until a
+    // second signer submits a ScheduleSignTransaction.
+    try {
+      const schedResult = await createScheduledTransfer(action);
+      scheduleId = schedResult.scheduleId;
+      stage = "SCHEDULED";
+    } catch {
+      // Scheduled tx creation failed — non-fatal, fall through to audit
+      // with stage still POLICY_EVALUATED so it's clear no schedule was created.
+    }
   }
 
-  // Write audit record for all outcomes
+  // Write audit record for all outcomes (approved, denied, scheduled, etc.)
   let hcsTopicId = "";
   let hcsSequenceNumber = -1;
   try {
-    const auditMsg = await recordAudit(action, policyResult!, txId, agentContext);
+    const auditMsg = await recordAudit(action, policyResult!, txId, agentContext, scheduleId);
     hcsTopicId = auditMsg.topicId;
     hcsSequenceNumber = auditMsg.sequenceNumber;
-    stage = "AUDITED";
+    if (stage !== "SCHEDULED") stage = "AUDITED";
   } catch {
     // Audit failure is non-fatal — log and continue
   }
@@ -174,6 +195,7 @@ export async function run(action: Action, agentContext?: AgentContext): Promise<
     timestamp: now(),
     txId,
     balanceHbar,
+    scheduleId,
     hcsTopicId,
     hcsSequenceNumber,
     error: "",

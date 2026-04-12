@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
         txId: "",
         balanceHbar: null,
+        scheduleId: "",
         hcsTopicId,
         hcsSequenceNumber,
         error: clarification,
