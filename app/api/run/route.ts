@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseInstruction } from "../../../src/agents/intentParser";
 import { run } from "../../../src/runtime/pipeline";
+import { record as recordAudit } from "../../../src/audit/trail";
 import type { AgentContext } from "../../../src/schemas/audit";
 
 export async function POST(req: NextRequest) {
@@ -33,17 +34,50 @@ export async function POST(req: NextRequest) {
 
     // Guard: do not proceed when confidence is too low or instruction is ambiguous
     if (!parseResult.shouldProceed) {
+      const clarification = parseResult.clarificationMessage ?? "Instruction too ambiguous to process.";
+
+      const agentContext: AgentContext = {
+        parserMode: parseResult.parserMode,
+        confidence: parseResult.confidence,
+        parseWarnings: parseResult.parseWarnings,
+        rawInstruction: parseResult.workflowContext.rawInstruction,
+      };
+
+      // Synthetic policy result — no execution, but the non-proceed outcome is
+      // still recorded to HCS so the evidence trail is complete.
+      const blockedPolicyResult = {
+        decision: "DENIED" as const,
+        denialReason: null,
+        denialDetail: clarification,
+        evaluatedRules: [] as string[],
+      };
+
+      let hcsTopicId = "";
+      let hcsSequenceNumber = -1;
+      try {
+        const auditMsg = await recordAudit(
+          parseResult.action,
+          blockedPolicyResult,
+          "",           // no txId — execution never ran
+          agentContext
+        );
+        hcsTopicId = auditMsg.topicId;
+        hcsSequenceNumber = auditMsg.sequenceNumber;
+      } catch {
+        // Audit failure is non-fatal — still return the PARSE_BLOCKED response
+      }
+
       return NextResponse.json({
         action: parseResult.action,
         context: null,
-        policyResult: null,
+        policyResult: blockedPolicyResult,
         stage: "PARSE_BLOCKED",
         timestamp: new Date().toISOString(),
         txId: "",
         balanceHbar: null,
-        hcsTopicId: "",
-        hcsSequenceNumber: -1,
-        error: parseResult.clarificationMessage ?? "Instruction too ambiguous to process.",
+        hcsTopicId,
+        hcsSequenceNumber,
+        error: clarification,
         parseResult,
       });
     }
